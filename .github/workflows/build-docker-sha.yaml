@@ -10,9 +10,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-      - name: Move
-        run: |
-          cd server
       - uses: docker/setup-qemu-action@v1
       - uses: docker/setup-buildx-action@v1
       - name: Cache Docker layers
@@ -39,3 +36,4 @@ jobs:
         with:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          context: ./server
