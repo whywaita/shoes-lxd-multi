@@ -17,7 +17,9 @@ import (
 )
 
 const (
-	EnvTargetHosts    = "LXD_MULTI_TARGET_HOSTS"
+	// EnvTargetHosts is list of target host
+	EnvTargetHosts = "LXD_MULTI_TARGET_HOSTS"
+	// EnvServerEndpoint is endpoint of server
 	EnvServerEndpoint = "LXD_MULTI_SERVER_ENDPOINT"
 )
 

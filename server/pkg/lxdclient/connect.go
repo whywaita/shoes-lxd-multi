@@ -38,6 +38,7 @@ func ConnectLXDs(hostConfigs []config.HostConfig) ([]LXDHost, error) {
 }
 
 var (
+	// ErrTimeoutConnectLXD is error message for timeout of ConnectLXD
 	ErrTimeoutConnectLXD = fmt.Errorf("timeout of ConnectLXD")
 )
 

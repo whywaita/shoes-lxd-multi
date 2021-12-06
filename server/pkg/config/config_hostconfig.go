@@ -13,16 +13,20 @@ type HostConfigMap struct {
 	s sync.Map
 }
 
+// ErrHostNotFound is error message for host config is not found
 var ErrHostNotFound = fmt.Errorf("host config is not found")
 
+// NewHostConfigMap create config map for host config
 func NewHostConfigMap() *HostConfigMap {
 	return &HostConfigMap{}
 }
 
+// Store host config
 func (s *HostConfigMap) Store(lxdAPIAddress string, hostConfig HostConfig) {
 	s.s.Store(lxdAPIAddress, hostConfig)
 }
 
+// Load host config
 func (s *HostConfigMap) Load(lxdAPIAddress string) (*HostConfig, error) {
 	v, ok := s.s.Load(lxdAPIAddress)
 	if !ok {
@@ -37,6 +41,7 @@ func (s *HostConfigMap) Load(lxdAPIAddress string) (*HostConfig, error) {
 	return &t, nil
 }
 
+// Range host config
 func (s *HostConfigMap) Range(f func(key string, value HostConfig) bool) {
 	s.s.Range(func(key, value interface{}) bool {
 		k := key.(string)

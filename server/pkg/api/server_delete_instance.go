@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// DeleteInstance delete instance to LXD server
 func (s *ShoesLXDMultiServer) DeleteInstance(ctx context.Context, req *pb.DeleteInstanceRequest) (*pb.DeleteInstanceResponse, error) {
 	log.Printf("DeleteInstance req: %+v\n", req)
 	if _, err := runner.ToUUID(req.CloudId); err != nil {

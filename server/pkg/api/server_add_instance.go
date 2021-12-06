@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// AddInstance add instance to LXD server
 func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstanceRequest) (*pb.AddInstanceResponse, error) {
 	log.Printf("AddInstance req: %+v\n", req)
 	if _, err := runner.ToUUID(req.RunnerName); err != nil {
@@ -133,6 +134,7 @@ func (s *ShoesLXDMultiServer) scheduleHost(targetLXDHosts []lxdclient.LXDHost) (
 }
 
 var (
+	// ErrNoValidHost is not valid host in targets
 	ErrNoValidHost = fmt.Errorf("no valid host in targets")
 )
 

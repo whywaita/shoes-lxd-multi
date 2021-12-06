@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc"
 )
 
+// ShoesLXDMultiServer implement gRPC server
 type ShoesLXDMultiServer struct {
 	pb.UnimplementedShoesLXDMultiServer
 
