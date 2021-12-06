@@ -1,0 +1,50 @@
+name: Test
+on:
+  push:
+    branches:
+      - "**"
+  pull_request: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - server
+          - shoes-lxd-multi
+    steps:
+      - name: Setup go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.16.x
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+      - name: Move
+        run: |
+          cd ${{ matrix.target }}
+      - name: lint
+        run: |
+          GO111MODULE=off GOBIN=$(pwd)/bin go get golang.org/x/lint/golint
+          bin/golint -set_exit_status ./...
+      - name: go vet
+        run: |
+          go vet ./...
+      - name: go test
+        run: |
+          go test ./...
+  docker-build-test:
+    runs-on: ubuntu-latest
+    steps:
+     - name: Checkout
+       uses: actions/checkout@v2
+       with:
+         fetch-depth: 1
+     - name: Move
+       run: |
+         cd server
+     - name: docker build
+       run: docker build .
