@@ -1,11 +1,29 @@
-name: Build Docker image (sha) for Server
+name: Release
 on:
   push:
-    branches:
-      - "**"
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
 
 jobs:
-  docker-build-sha:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Setup Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.16
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v2
+        with:
+          version: latest
+          args: release --rm-dist
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  docker:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -30,6 +48,8 @@ jobs:
         with:
           images: ghcr.io/whywaita/shoes-lxd-multi
           tags: |
+            type=raw,value=latest
+            type=semver,pattern={{raw}}
             type=sha
       - name: Build container image
         uses: docker/build-push-action@v2
