@@ -23,18 +23,17 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 1
-      - name: Move
-        run: |
-          cd ${{ matrix.target }}
       - name: lint
         run: |
           GO111MODULE=off GOBIN=$(pwd)/bin go get golang.org/x/lint/golint
           bin/golint -set_exit_status ./...
       - name: go vet
         run: |
+          cd ${{ matrix.target }}
           go vet ./...
       - name: go test
         run: |
+          cd ${{ matrix.target }}
           go test ./...
   docker-build-test:
     runs-on: ubuntu-latest
@@ -43,8 +42,7 @@ jobs:
        uses: actions/checkout@v2
        with:
          fetch-depth: 1
-     - name: Move
+     - name: docker build
        run: |
          cd server
-     - name: docker build
-       run: docker build .
+         docker build .
