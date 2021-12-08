@@ -190,6 +190,8 @@ github.com/whywaita/myshoes v1.10.4 h1:4EeoOKnwN2HpCe8KaLRQhQPWDvqYlNSPjIc94z5WC
 github.com/whywaita/myshoes v1.10.4/go.mod h1:1HsvGV2VRtOtagjo0S0XhYM9dJdOHzX2+XXJ1yQAG04=
 github.com/whywaita/shoes-lxd-multi/proto.go v0.0.0-20211203151606-53728ef694c2 h1:bidYeGz7agcdZMjO1yk2GhjhZMuVZmszfu40StCblmc=
 github.com/whywaita/shoes-lxd-multi/proto.go v0.0.0-20211203151606-53728ef694c2/go.mod h1:xLARbdd13u1aMMBI0xRc8FVv4RRoCFf5f7+E/HaNs7o=
+github.com/whywaita/shoes-lxd-multi/proto.go v0.0.0-20211208053634-b26d9a26e161 h1:p8niwHC6nWbg0uoX3pd3aI5ZwVxgtHXGDzSKx49zcfg=
+github.com/whywaita/shoes-lxd-multi/proto.go v0.0.0-20211208053634-b26d9a26e161/go.mod h1:xLARbdd13u1aMMBI0xRc8FVv4RRoCFf5f7+E/HaNs7o=
 github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f/go.mod h1:N2zxlSyiKSe5eX1tZViRH5QA0qijqEDrYZiPEAiq3wU=
 github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415/go.mod h1:GwrjFmJcFw6At/Gs6z4yjiIwzuJ1/+UwLxMQDVQXShQ=
 github.com/xeipuuv/gojsonschema v1.2.0/go.mod h1:anYRn/JVcOK2ZgGU+IjEV4nwlhoK5sQluxsYJ78Id3Y=

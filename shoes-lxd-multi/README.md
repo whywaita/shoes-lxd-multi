@@ -17,4 +17,11 @@ shoes-provider implementation for shoes-lxd-multi
 ]
 ```
 
-- `LXD_MULTI_SERVER_ENDPOINT`: Endpoint of Server-side Application 
+- `LXD_MULTI_SERVER_ENDPOINT`: Endpoint of Server-side Application
+
+### Optional values
+
+- `LXD_MULTI_IMAGE_ALIAS`
+  - set runner image alias
+  - default: `ubuntu:bionic`
+  - e.g.) for remote image server: `https://192.0.2.110:8443/ubuntu-custom`

@@ -18,10 +18,7 @@ Server-side implementation for shoes-lxd-multi
 ```
 
 ### Optional values
-- `LXD_MULTI_IMAGE_ALIAS`
-    - set runner image alias
-    - default: `ubuntu:bionic`
-    - e.g.) for remote image server: `https://192.0.2.110:8443/ubuntu-custom`
+
 - `LXD_MULTI_RESOURCE_TYPE_MAPPING`
     - mapping `resource_type` and CPU / Memory.
     - need JSON format. keys is `resource_type_name`, `cpu`, `memory`.

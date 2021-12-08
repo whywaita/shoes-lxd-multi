@@ -8,7 +8,6 @@ import (
 
 	pb "github.com/whywaita/shoes-lxd-multi/proto.go"
 
-	"github.com/lxc/lxd/shared/api"
 	"github.com/whywaita/myshoes/pkg/datastore"
 )
 
@@ -16,8 +15,6 @@ const (
 	// EnvLXDHosts is json of lxd hosts
 	EnvLXDHosts = "LXD_MULTI_HOSTS"
 
-	// EnvLXDImageAlias is alias in lxd
-	EnvLXDImageAlias = "LXD_MULTI_IMAGE_ALIAS"
 	// EnvLXDResourceTypeMapping is mapping resource in lxd
 	EnvLXDResourceTypeMapping = "LXD_MULTI_RESOURCE_TYPE_MAPPING"
 	// EnvPort will listen port
@@ -34,10 +31,10 @@ type Mapping struct {
 }
 
 // Load load config from Environment values
-func Load() (*HostConfigMap, map[pb.ResourceType]Mapping, *api.InstanceSource, int, uint64, error) {
+func Load() (*HostConfigMap, map[pb.ResourceType]Mapping, int, uint64, error) {
 	hostConfigs, err := loadHostConfigs()
 	if err != nil {
-		return nil, nil, nil, -1, 0, fmt.Errorf("failed to load host config: %w", err)
+		return nil, nil, -1, 0, fmt.Errorf("failed to load host config: %w", err)
 	}
 
 	envMappingJSON := os.Getenv(EnvLXDResourceTypeMapping)
@@ -45,13 +42,8 @@ func Load() (*HostConfigMap, map[pb.ResourceType]Mapping, *api.InstanceSource, i
 	if envMappingJSON != "" {
 		m, err = readResourceTypeMapping(envMappingJSON)
 		if err != nil {
-			return nil, nil, nil, -1, 0, fmt.Errorf("failed to read %s: %w", EnvLXDResourceTypeMapping, err)
+			return nil, nil, -1, 0, fmt.Errorf("failed to read %s: %w", EnvLXDResourceTypeMapping, err)
 		}
-	}
-
-	alias, err := parseAlias(os.Getenv(EnvLXDImageAlias))
-	if err != nil {
-		return nil, nil, nil, -1, 0, fmt.Errorf("failed to parse alias %s: %w", EnvLXDImageAlias, err)
 	}
 
 	envPort := os.Getenv(EnvPort)
@@ -61,7 +53,7 @@ func Load() (*HostConfigMap, map[pb.ResourceType]Mapping, *api.InstanceSource, i
 	} else {
 		port, err = strconv.Atoi(envPort)
 		if err != nil {
-			return nil, nil, nil, -1, 0, fmt.Errorf("failed to parse %s, need to int: %w", EnvPort, err)
+			return nil, nil, -1, 0, fmt.Errorf("failed to parse %s, need to int: %w", EnvPort, err)
 		}
 	}
 
@@ -72,11 +64,11 @@ func Load() (*HostConfigMap, map[pb.ResourceType]Mapping, *api.InstanceSource, i
 	} else {
 		overCommitPercent, err = strconv.ParseUint(envOCP, 10, 64)
 		if err != nil {
-			return nil, nil, nil, -1, 0, fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
+			return nil, nil, -1, 0, fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
 		}
 	}
 
-	return hostConfigs, m, alias, port, overCommitPercent, nil
+	return hostConfigs, m, port, overCommitPercent, nil
 }
 
 func readResourceTypeMapping(env string) (map[pb.ResourceType]Mapping, error) {

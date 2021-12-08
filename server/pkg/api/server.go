@@ -5,8 +5,6 @@ import (
 	"log"
 	"net"
 
-	"github.com/lxc/lxd/shared/api"
-
 	pb "github.com/whywaita/shoes-lxd-multi/proto.go"
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/config"
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
@@ -19,17 +17,15 @@ type ShoesLXDMultiServer struct {
 
 	hostConfigs     *config.HostConfigMap
 	resourceMapping map[pb.ResourceType]config.Mapping
-	instanceSource  *api.InstanceSource
 
 	overCommitPercent uint64
 }
 
 // New create gRPC server
-func New(hostConfigs *config.HostConfigMap, mapping map[pb.ResourceType]config.Mapping, instanceSource *api.InstanceSource, overCommitPercent uint64) (*ShoesLXDMultiServer, error) {
+func New(hostConfigs *config.HostConfigMap, mapping map[pb.ResourceType]config.Mapping, overCommitPercent uint64) (*ShoesLXDMultiServer, error) {
 	return &ShoesLXDMultiServer{
 		hostConfigs:       hostConfigs,
 		resourceMapping:   mapping,
-		instanceSource:    instanceSource,
 		overCommitPercent: overCommitPercent,
 	}, nil
 }
