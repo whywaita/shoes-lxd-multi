@@ -30,6 +30,7 @@ message AddInstanceRequest {
   ResourceType resource_type = 3;
 
   repeated string target_hosts = 4;
+  string image_alias = 5;
 }
 
 message AddInstanceResponse {
