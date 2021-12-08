@@ -25,14 +25,14 @@ func main() {
 }
 
 func run() error {
-	hostConfigs, mapping, instanceSource, listenPort, overCommitPercent, err := config.Load()
+	hostConfigs, mapping, listenPort, overCommitPercent, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("failed to create server: %w", err)
 	}
 
 	go serveMetrics(context.Background(), hostConfigs)
 
-	server, err := api.New(hostConfigs, mapping, instanceSource, overCommitPercent)
+	server, err := api.New(hostConfigs, mapping, overCommitPercent)
 	if err != nil {
 		return fmt.Errorf("failed to create server: %w", err)
 	}

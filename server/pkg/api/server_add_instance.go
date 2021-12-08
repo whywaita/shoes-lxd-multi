@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,6 +27,12 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 		return nil, status.Errorf(codes.InvalidArgument, "failed to parse request name: %+v", err)
 	}
 	instanceName := req.RunnerName
+
+	instanceSource, err := parseAlias(req.ImageAlias)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "failed to parse image alias: %+v", err)
+	}
+
 	targetLXDHosts, err := s.validateTargetHosts(req.TargetHosts)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to validate target hosts: %+v", err)
@@ -45,7 +52,7 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 				Config: s.getInstanceConfig(req.SetupScript, req.ResourceType),
 			},
 			Name:   instanceName,
-			Source: *s.instanceSource,
+			Source: *instanceSource,
 		}
 
 		client = host.Client
@@ -160,4 +167,41 @@ func schedule(targets []targetHost, limitOverCommit uint64) (*targetHost, error)
 
 	index := rand.Intn(len(schedulableTargets))
 	return &schedulableTargets[index], nil
+}
+
+// parseAlias parse user input
+func parseAlias(input string) (*api.InstanceSource, error) {
+	if strings.EqualFold(input, "") {
+		// default value is ubuntu:bionic
+		return &api.InstanceSource{
+			Type: "image",
+			Properties: map[string]string{
+				"os":      "ubuntu",
+				"release": "bionic",
+			},
+		}, nil
+	}
+
+	if strings.HasPrefix(input, "http") {
+		// https://<FQDN or IP>:8443/<alias>
+		u, err := url.Parse(input)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse alias: %w", err)
+		}
+
+		urlImageServer := fmt.Sprintf("%s://%s", u.Scheme, u.Host)
+		alias := strings.TrimPrefix(u.Path, "/")
+
+		return &api.InstanceSource{
+			Type:   "image",
+			Mode:   "pull",
+			Server: urlImageServer,
+			Alias:  alias,
+		}, nil
+	}
+
+	return &api.InstanceSource{
+		Type:  "image",
+		Alias: input,
+	}, nil
 }
