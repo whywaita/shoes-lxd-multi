@@ -152,7 +152,12 @@ func (l Client) DeleteInstance(ctx context.Context, req *pb.DeleteInstanceReques
 	}
 
 	if _, err := slClient.DeleteInstance(ctx, slReq); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to DeleteInstance: %+v", err)
+		switch status.Code(err) {
+		case codes.NotFound:
+			return nil, status.Errorf(codes.NotFound, "failed to DeleteInstance: %+v", err)
+		default:
+			return nil, status.Errorf(codes.Internal, "failed to DeleteInstance: %+v", err)
+		}
 	}
 	return &pb.DeleteInstanceResponse{}, nil
 }
