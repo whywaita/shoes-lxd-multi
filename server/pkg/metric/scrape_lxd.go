@@ -3,6 +3,9 @@ package metric
 import (
 	"context"
 	"fmt"
+	"strconv"
+
+	"github.com/docker/go-units"
 
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
 
@@ -32,6 +35,11 @@ var (
 		prometheus.BuildFQName(namespace, lxdName, "host_usage_memory"),
 		"usage of memory",
 		[]string{"hostname"}, nil,
+	)
+	lxdInstance = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, lxdName, "instance"),
+		"LXD instances",
+		[]string{"instance_name", "stadium_name", "cpu", "memory"}, nil,
 	)
 )
 
@@ -64,24 +72,41 @@ func scrapeLXDHost(ctx context.Context, hostConfigs []config.HostConfig, ch chan
 	}
 
 	for _, host := range hosts {
-		allCPU, allMemory, err := lxdclient.ScrapeLXDHostResources(host.Client)
+		allCPU, allMemory, hostname, err := lxdclient.ScrapeLXDHostResources(host.Client)
 		if err != nil {
 			return fmt.Errorf("failed to scrape lxd resources: %w", err)
 		}
 
 		ch <- prometheus.MustNewConstMetric(
-			lxdHostMaxCPU, prometheus.GaugeValue, float64(allCPU), host.HostConfig.LxdHostName)
+			lxdHostMaxCPU, prometheus.GaugeValue, float64(allCPU), hostname)
 		ch <- prometheus.MustNewConstMetric(
-			lxdHostMaxMemory, prometheus.GaugeValue, float64(allMemory), host.HostConfig.LxdHostName)
+			lxdHostMaxMemory, prometheus.GaugeValue, float64(allMemory), hostname)
 
-		allocatedCPU, allocatedMemory, err := lxdclient.ScrapeLXDHostAllocatedResources(host.Client)
+		instances, err := lxdclient.GetAnyInstances(host.Client)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve list of instance (host: %s): %w", hostname, err)
+		}
+
+		for _, instance := range instances {
+			memory, err := units.FromHumanSize(instance.Config["limits.memory"])
+			if err != nil {
+				return fmt.Errorf("failed to convert limits.memory: %w", err)
+			}
+
+			ch <- prometheus.MustNewConstMetric(
+				lxdInstance, prometheus.GaugeValue, 1,
+				instance.Name, hostname, instance.Config["limits.cpu"], strconv.FormatInt(memory, 10),
+			)
+		}
+
+		allocatedCPU, allocatedMemory, err := lxdclient.ScrapeLXDHostAllocatedResources(instances)
 		if err != nil {
 			return fmt.Errorf("failed to scrape instance info: %w", err)
 		}
 		ch <- prometheus.MustNewConstMetric(
-			lxdUsageCPU, prometheus.GaugeValue, float64(allocatedCPU), host.HostConfig.LxdHostName)
+			lxdUsageCPU, prometheus.GaugeValue, float64(allocatedCPU), hostname)
 		ch <- prometheus.MustNewConstMetric(
-			lxdUsageMemory, prometheus.GaugeValue, float64(allocatedMemory), host.HostConfig.LxdHostName)
+			lxdUsageMemory, prometheus.GaugeValue, float64(allocatedMemory), hostname)
 	}
 
 	return nil

@@ -25,11 +25,15 @@ func GetCPUOverCommitPercent(in Resource) uint64 {
 
 // GetResource get Resource
 func GetResource(client lxd.InstanceServer) (*Resource, error) {
-	cpuTotal, memoryTotal, err := ScrapeLXDHostResources(client)
+	cpuTotal, memoryTotal, _, err := ScrapeLXDHostResources(client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scrape total resource: %w", err)
 	}
-	cpuUsed, memoryUsed, err := ScrapeLXDHostAllocatedResources(client)
+	instances, err := GetAnyInstances(client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve list of instance: %w", err)
+	}
+	cpuUsed, memoryUsed, err := ScrapeLXDHostAllocatedResources(instances)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scrape allocated resource: %w", err)
 	}
@@ -43,22 +47,32 @@ func GetResource(client lxd.InstanceServer) (*Resource, error) {
 }
 
 // ScrapeLXDHostResources scrape all resources
-func ScrapeLXDHostResources(client lxd.InstanceServer) (uint64, uint64, error) {
+func ScrapeLXDHostResources(client lxd.InstanceServer) (uint64, uint64, string, error) {
 	resources, err := client.GetServerResources()
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to get server resource: %w", err)
+		return 0, 0, "", fmt.Errorf("failed to get server resource: %w", err)
 	}
 
-	return resources.CPU.Total, resources.Memory.Total, nil
+	server, _, err := client.GetServer()
+	if err != nil {
+		return 0, 0, "", fmt.Errorf("failed to get server: %w", err)
+	}
+
+	return resources.CPU.Total, resources.Memory.Total, server.Environment.ServerName, nil
+}
+
+// GetAnyInstances get any instances from lxd
+func GetAnyInstances(client lxd.InstanceServer) ([]api.Instance, error) {
+	instances, err := client.GetInstances(api.InstanceTypeAny)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve instances: %w", err)
+	}
+
+	return instances, nil
 }
 
 // ScrapeLXDHostAllocatedResources scrape allocated resources
-func ScrapeLXDHostAllocatedResources(client lxd.InstanceServer) (uint64, uint64, error) {
-	instances, err := client.GetInstances(api.InstanceTypeAny)
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to retrieve instances: %w", err)
-	}
-
+func ScrapeLXDHostAllocatedResources(instances []api.Instance) (uint64, uint64, error) {
 	var allocatedCPU uint64
 	var allocatedMemory uint64
 	for _, instance := range instances {

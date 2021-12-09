@@ -55,7 +55,6 @@ func (s *HostConfigMap) Range(f func(key string, value HostConfig) bool) {
 type HostConfig struct {
 	Cert tls.Certificate
 
-	LxdHostName   string
 	LxdHost       string
 	LxdClientCert string
 	LxdClientKey  string
