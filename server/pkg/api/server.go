@@ -49,15 +49,35 @@ func (s *ShoesLXDMultiServer) Run(listenPort int) error {
 
 // isExistInstance search created instance in same name
 func (s *ShoesLXDMultiServer) isExistInstance(targetLXDHosts []lxdclient.LXDHost, instanceName string) *lxdclient.LXDHost {
+	ch := make(chan lxdclient.LXDHost)
+	count := len(targetLXDHosts)
+
 	for _, lxdHost := range targetLXDHosts {
-		_, _, err := lxdHost.Client.GetInstance(instanceName)
-		if err == nil {
-			// found LXD worker
-			return &lxdHost
-		}
+		lxdHost := lxdHost
+		go func() {
+			defer func() {
+				count--
+			}()
+
+			_, _, err := lxdHost.Client.GetInstance(instanceName)
+			if err == nil {
+				// found LXD worker
+				ch <- lxdHost
+				return
+			}
+		}()
 	}
 
-	return nil
+	for {
+		select {
+		case found := <-ch:
+			return &found
+		default:
+			if count == 0 {
+				return nil
+			}
+		}
+	}
 }
 
 func (s *ShoesLXDMultiServer) validateTargetHosts(targetHosts []string) ([]lxdclient.LXDHost, error) {

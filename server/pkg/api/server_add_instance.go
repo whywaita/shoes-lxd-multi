@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -10,12 +11,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
-
 	lxd "github.com/lxc/lxd/client"
 	"github.com/lxc/lxd/shared/api"
+
 	"github.com/whywaita/myshoes/pkg/runner"
 	pb "github.com/whywaita/shoes-lxd-multi/proto.go"
+	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -122,8 +124,12 @@ func (s *ShoesLXDMultiServer) scheduleHost(targetLXDHosts []lxdclient.LXDHost) (
 	var targets []targetHost
 
 	for _, t := range targetLXDHosts {
-		resources, err := lxdclient.GetResource(t.Client)
+		resources, err := lxdclient.GetResource(t.HostConfig)
 		if err != nil {
+			if errors.Is(err, lxdclient.ErrTimeoutConnectLXD) {
+				continue
+			}
+
 			return nil, fmt.Errorf("failed to get resource (host: %s): %w", t.HostConfig.LxdHost, err)
 		}
 

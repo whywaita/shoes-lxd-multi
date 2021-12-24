@@ -4,7 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	lxd "github.com/lxc/lxd/client"
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/config"
@@ -20,18 +23,33 @@ type LXDHost struct {
 func ConnectLXDs(hostConfigs []config.HostConfig) ([]LXDHost, error) {
 	var targetLXDHosts []LXDHost
 
+	eg := errgroup.Group{}
+	mu := sync.Mutex{}
+
 	for _, hc := range hostConfigs {
-		conn, err := connectLXDWithTimeout(hc.LxdHost, hc.LxdClientCert, hc.LxdClientKey)
-		if err != nil && !errors.Is(err, ErrTimeoutConnectLXD) {
-			return nil, fmt.Errorf("failed to connect LXD with timeout: %w", err)
-		} else if errors.Is(err, ErrTimeoutConnectLXD) {
-			log.Printf("failed to connect LXD, So ignore host (host: %s)\n", hc.LxdHost)
-			continue
-		}
-		targetLXDHosts = append(targetLXDHosts, LXDHost{
-			Client:     *conn,
-			HostConfig: hc,
+		hc := hc
+		eg.Go(func() error {
+			conn, err := ConnectLXDWithTimeout(hc.LxdHost, hc.LxdClientCert, hc.LxdClientKey)
+			if err != nil && !errors.Is(err, ErrTimeoutConnectLXD) {
+				log.Printf("failed to connect LXD with timeout (host: %s): %+v\n", err, hc.LxdHost)
+				return nil
+			} else if errors.Is(err, ErrTimeoutConnectLXD) {
+				log.Printf("failed to connect LXD, So ignore host (host: %s)\n", hc.LxdHost)
+				return nil
+			}
+
+			mu.Lock()
+			targetLXDHosts = append(targetLXDHosts, LXDHost{
+				Client:     *conn,
+				HostConfig: hc,
+			})
+			mu.Unlock()
+			return nil
 		})
+	}
+
+	if err := eg.Wait(); err != nil {
+		return nil, fmt.Errorf("failed to connect LXD servers: %w", err)
 	}
 
 	return targetLXDHosts, nil
@@ -42,7 +60,9 @@ var (
 	ErrTimeoutConnectLXD = fmt.Errorf("timeout of ConnectLXD")
 )
 
-func connectLXDWithTimeout(host, clientCert, clientKey string) (*lxd.InstanceServer, error) {
+// ConnectLXDWithTimeout connect LXD API with timeout
+// lxd.ConnectLXD is not support context yet. So ConnectLXDWithTimeout occurred goroutine leak if timeout.
+func ConnectLXDWithTimeout(host, clientCert, clientKey string) (*lxd.InstanceServer, error) {
 	type resultConnectLXD struct {
 		client lxd.InstanceServer
 		err    error
