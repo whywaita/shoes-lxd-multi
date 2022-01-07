@@ -107,6 +107,19 @@ func scrapeLXDHost(ctx context.Context, hostConfigs []config.HostConfig, ch chan
 			lxdUsageCPU, prometheus.GaugeValue, float64(allocatedCPU), hostname)
 		ch <- prometheus.MustNewConstMetric(
 			lxdUsageMemory, prometheus.GaugeValue, float64(allocatedMemory), hostname)
+
+		s := lxdclient.LXDStatus{
+			Resource: lxdclient.Resource{
+				CPUTotal:    allCPU,
+				MemoryTotal: allMemory,
+				CPUUsed:     allocatedCPU,
+				MemoryUsed:  allocatedMemory,
+			},
+			HostConfig: host.HostConfig,
+		}
+		if err := lxdclient.SetStatusCache(host.HostConfig.LxdHost, s); err != nil {
+			return fmt.Errorf("failed to set status cache: %w", err)
+		}
 	}
 
 	return nil

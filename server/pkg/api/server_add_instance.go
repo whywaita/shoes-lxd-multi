@@ -9,13 +9,17 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
-	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
+	"golang.org/x/sync/errgroup"
 
 	lxd "github.com/lxc/lxd/client"
 	"github.com/lxc/lxd/shared/api"
+
 	"github.com/whywaita/myshoes/pkg/runner"
 	pb "github.com/whywaita/shoes-lxd-multi/proto.go"
+	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -119,25 +123,50 @@ type targetHost struct {
 }
 
 func (s *ShoesLXDMultiServer) scheduleHost(targetLXDHosts []lxdclient.LXDHost) (*lxdclient.LXDHost, error) {
-	var targets []targetHost
-
-	for _, t := range targetLXDHosts {
-		resources, err := lxdclient.GetResource(t.Client)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get resource (host: %s): %w", t.HostConfig.LxdHost, err)
-		}
-
-		targets = append(targets, targetHost{
-			host:              t,
-			resource:          *resources,
-			percentOverCommit: lxdclient.GetCPUOverCommitPercent(*resources),
-		})
+	targets, err := getResources(targetLXDHosts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get resources: %w", err)
 	}
+
 	target, err := schedule(targets, s.overCommitPercent)
 	if err != nil {
 		return nil, fmt.Errorf("failed to schedule: %w", err)
 	}
 	return &(target.host), nil
+}
+
+func getResources(targetLXDHosts []lxdclient.LXDHost) ([]targetHost, error) {
+	var targets []targetHost
+
+	eg := errgroup.Group{}
+	mu := sync.Mutex{}
+
+	for _, t := range targetLXDHosts {
+		t := t
+		eg.Go(func() error {
+			resources, err := lxdclient.GetResource(t.HostConfig)
+			if err != nil {
+				log.Printf("failed to get resource (host: %s): %+v\n", t.HostConfig.LxdHost, err)
+				return nil
+			}
+
+			mu.Lock()
+			targets = append(targets, targetHost{
+				host:              t,
+				resource:          *resources,
+				percentOverCommit: lxdclient.GetCPUOverCommitPercent(*resources),
+			})
+			mu.Unlock()
+
+			return nil
+		})
+	}
+
+	if err := eg.Wait(); err != nil {
+		return nil, fmt.Errorf("failed to get resources: %w", err)
+	}
+
+	return targets, nil
 }
 
 var (

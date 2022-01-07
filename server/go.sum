@@ -807,8 +807,6 @@ github.com/weppos/publicsuffix-go v0.4.0/go.mod h1:z3LCPQ38eedDQSwmsSRW4Y7t2L8Ln
 github.com/weppos/publicsuffix-go v0.5.0/go.mod h1:z3LCPQ38eedDQSwmsSRW4Y7t2L8Ln16JPQ02lHAdn5k=
 github.com/whywaita/myshoes v1.10.4 h1:4EeoOKnwN2HpCe8KaLRQhQPWDvqYlNSPjIc94z5WCqU=
 github.com/whywaita/myshoes v1.10.4/go.mod h1:1HsvGV2VRtOtagjo0S0XhYM9dJdOHzX2+XXJ1yQAG04=
-github.com/whywaita/shoes-lxd-multi/proto.go v0.0.0-20211203151606-53728ef694c2 h1:bidYeGz7agcdZMjO1yk2GhjhZMuVZmszfu40StCblmc=
-github.com/whywaita/shoes-lxd-multi/proto.go v0.0.0-20211203151606-53728ef694c2/go.mod h1:xLARbdd13u1aMMBI0xRc8FVv4RRoCFf5f7+E/HaNs7o=
 github.com/whywaita/shoes-lxd-multi/proto.go v0.0.0-20211208053634-b26d9a26e161 h1:p8niwHC6nWbg0uoX3pd3aI5ZwVxgtHXGDzSKx49zcfg=
 github.com/whywaita/shoes-lxd-multi/proto.go v0.0.0-20211208053634-b26d9a26e161/go.mod h1:xLARbdd13u1aMMBI0xRc8FVv4RRoCFf5f7+E/HaNs7o=
 github.com/x448/float16 v0.8.4/go.mod h1:14CWIYCyZA/cWjXOioeEpHeN/83MdbZDRQHoFcYsOfg=
@@ -997,6 +995,7 @@ golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a/go.mod h1:RxMgew5VJxzue5/jJ
 golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.0.0-20201207232520-09787c993a3a/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
+golang.org/x/sync v0.0.0-20210220032951-036812b2e83c h1:5KslGYwFpkhGh+Q16bwMP3cOontH8FOep7tGV86Y7SQ=
 golang.org/x/sync v0.0.0-20210220032951-036812b2e83c/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sys v0.0.0-20171026204733-164713f0dfce/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
 golang.org/x/sys v0.0.0-20180823144017-11551d06cbcc/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=

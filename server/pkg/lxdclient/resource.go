@@ -1,9 +1,12 @@
 package lxdclient
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strconv"
+
+	"github.com/whywaita/shoes-lxd-multi/server/pkg/config"
 
 	"github.com/docker/go-units"
 	lxd "github.com/lxc/lxd/client"
@@ -24,12 +27,26 @@ func GetCPUOverCommitPercent(in Resource) uint64 {
 }
 
 // GetResource get Resource
-func GetResource(client lxd.InstanceServer) (*Resource, error) {
-	cpuTotal, memoryTotal, _, err := ScrapeLXDHostResources(client)
+func GetResource(hostConfig config.HostConfig) (*Resource, error) {
+	status, err := GetStatusCache(hostConfig.LxdHost)
+	if err == nil {
+		// found from cache
+		return &status.Resource, nil
+	}
+	if err != nil && !errors.Is(err, ErrCacheNotFound) {
+		return nil, fmt.Errorf("failed to get status from cache: %w", err)
+	}
+
+	client, err := ConnectLXDWithTimeout(hostConfig.LxdHost, hostConfig.LxdClientCert, hostConfig.LxdClientKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect lxd: %w", err)
+	}
+
+	cpuTotal, memoryTotal, _, err := ScrapeLXDHostResources(*client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scrape total resource: %w", err)
 	}
-	instances, err := GetAnyInstances(client)
+	instances, err := GetAnyInstances(*client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve list of instance: %w", err)
 	}
@@ -38,12 +55,21 @@ func GetResource(client lxd.InstanceServer) (*Resource, error) {
 		return nil, fmt.Errorf("failed to scrape allocated resource: %w", err)
 	}
 
-	return &Resource{
+	r := Resource{
 		CPUTotal:    cpuTotal,
 		MemoryTotal: memoryTotal,
 		CPUUsed:     cpuUsed,
 		MemoryUsed:  memoryUsed,
-	}, nil
+	}
+	s := LXDStatus{
+		Resource:   r,
+		HostConfig: hostConfig,
+	}
+	if err := SetStatusCache(hostConfig.LxdHost, s); err != nil {
+		return nil, fmt.Errorf("failed to set status to cache: %w", err)
+	}
+
+	return &r, nil
 }
 
 // ScrapeLXDHostResources scrape all resources
