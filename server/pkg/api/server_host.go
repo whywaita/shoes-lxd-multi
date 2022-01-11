@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -26,12 +27,15 @@ func (s *ShoesLXDMultiServer) isExistInstance(targetLXDHosts []lxdclient.LXDHost
 		host := host
 		eg.Go(func() error {
 			err := isExistInstanceWithTimeout(host, instanceName)
-			if err != nil && !errors.Is(err, ErrTimeoutGetInstance) {
-				log.Printf("failed to get instance with timeout (host: %s): %+v\n", host.HostConfig.LxdHost, err)
+			switch {
+			case errors.Is(err, ErrInstanceIsNotFound):
+				// not found
 				return nil
-			} else if errors.Is(err, ErrTimeoutGetInstance) {
+			case errors.Is(err, ErrTimeoutGetInstance):
 				log.Printf("failed to get instance (reach timeout), So ignore host (host: %s)\n", host.HostConfig.LxdHost)
 				return nil
+			case err != nil:
+				log.Printf("failed to get instance with timeout (host: %s): %+v\n", host.HostConfig.LxdHost, err)
 			}
 
 			foundHost = &host
@@ -64,6 +68,9 @@ func isExistInstanceWithTimeout(targetLXDHost lxdclient.LXDHost, instanceName st
 	select {
 	case err := <-errCh:
 		if err != nil {
+			if strings.EqualFold(err.Error(), "Not Found") {
+				return fmt.Errorf("failed to found instance: %w", ErrInstanceIsNotFound)
+			}
 			return fmt.Errorf("failed to found instance: %w", err)
 		}
 
