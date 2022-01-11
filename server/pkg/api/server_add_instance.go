@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -42,9 +43,13 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 		return nil, status.Errorf(codes.InvalidArgument, "failed to validate target hosts: %+v", err)
 	}
 
-	host := s.isExistInstance(targetLXDHosts, instanceName)
+	host, err := s.isExistInstance(targetLXDHosts, instanceName)
+	if err != nil && !errors.Is(err, ErrInstanceIsNotFound) {
+		return nil, status.Errorf(codes.Internal, "failed to get instance: %+v", err)
+	}
+
 	var client lxd.InstanceServer
-	if host == nil {
+	if errors.Is(err, ErrInstanceIsNotFound) {
 		host, err := s.scheduleHost(targetLXDHosts)
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "failed to schedule host: %+v", err)

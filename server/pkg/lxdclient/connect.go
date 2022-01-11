@@ -91,7 +91,6 @@ func ConnectLXDWithTimeout(host, clientCert, clientKey string) (*lxd.InstanceSer
 		}
 		return &result.client, nil
 	case <-time.After(2 * time.Second):
-		// This block occurred goroutine leak when timeout. But shoes-lxd is short range. maybe safety.
 		// lxd.ConnectLXD() is not support context.Context yet. need to refactor it after support context.Context.
 		return nil, ErrTimeoutConnectLXD
 	}
