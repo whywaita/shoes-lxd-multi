@@ -12,6 +12,7 @@ import (
 )
 
 var (
+	// ErrInstanceIsNotFound is error message for instance is not found
 	ErrInstanceIsNotFound = fmt.Errorf("instance is not found")
 )
 
