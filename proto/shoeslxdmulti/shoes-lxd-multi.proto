@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package shoeslxdmulti;
+
+option go_package = "github.com/whywaita/shoes-lxd-multi/proto.go/shoeslxdmulti";
+import "whywaita/myshoes.proto";
+
+service ShoesLXDMulti {
+  rpc AddInstance(AddInstanceRequest) returns (AddInstanceResponse) {}
+  rpc DeleteInstance(DeleteInstanceRequest) returns (DeleteInstanceResponse) {}
+}
+
+// req / resp
+message AddInstanceRequest {
+  string runner_name = 1;
+  string setup_script = 2;
+  whywaita.myshoes.ResourceType resource_type = 3;
+  repeated string labels = 6;
+
+  repeated string target_hosts = 4;
+  string image_alias = 5;
+}
+
+message AddInstanceResponse {
+  string cloud_id = 1;
+  string shoes_type = 2;
+  string ip_address = 3;
+}
+
+message DeleteInstanceRequest {
+  string cloud_id = 1;
+  repeated string target_hosts = 2;
+}
+
+message DeleteInstanceResponse {}
