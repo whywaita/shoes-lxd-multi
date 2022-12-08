@@ -6,8 +6,7 @@ import (
 	"os"
 	"strconv"
 
-	pb "github.com/whywaita/shoes-lxd-multi/proto.go"
-
+	myshoespb "github.com/whywaita/myshoes/api/proto.go"
 	"github.com/whywaita/myshoes/pkg/datastore"
 )
 
@@ -31,14 +30,14 @@ type Mapping struct {
 }
 
 // Load load config from Environment values
-func Load() (*HostConfigMap, map[pb.ResourceType]Mapping, int, uint64, error) {
+func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int, uint64, error) {
 	hostConfigs, err := loadHostConfigs()
 	if err != nil {
 		return nil, nil, -1, 0, fmt.Errorf("failed to load host config: %w", err)
 	}
 
 	envMappingJSON := os.Getenv(EnvLXDResourceTypeMapping)
-	var m map[pb.ResourceType]Mapping
+	var m map[myshoespb.ResourceType]Mapping
 	if envMappingJSON != "" {
 		m, err = readResourceTypeMapping(envMappingJSON)
 		if err != nil {
@@ -71,46 +70,20 @@ func Load() (*HostConfigMap, map[pb.ResourceType]Mapping, int, uint64, error) {
 	return hostConfigs, m, port, overCommitPercent, nil
 }
 
-func readResourceTypeMapping(env string) (map[pb.ResourceType]Mapping, error) {
+func readResourceTypeMapping(env string) (map[myshoespb.ResourceType]Mapping, error) {
 	var mapping []Mapping
 	if err := json.Unmarshal([]byte(env), &mapping); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
 	}
 
-	r := map[pb.ResourceType]Mapping{}
+	r := map[myshoespb.ResourceType]Mapping{}
 	for _, m := range mapping {
 		rt := datastore.UnmarshalResourceType(m.ResourceTypeName)
 		if rt == datastore.ResourceTypeUnknown {
 			return nil, fmt.Errorf("%s is invalid resource type", m.ResourceTypeName)
 		}
-
-		r[toPb(rt)] = m
+		r[rt.ToPb()] = m
 	}
 
 	return r, nil
-}
-
-func toPb(in datastore.ResourceType) pb.ResourceType {
-	switch in {
-	case datastore.ResourceTypeNano:
-		return pb.ResourceType_Nano
-	case datastore.ResourceTypeMicro:
-		return pb.ResourceType_Micro
-	case datastore.ResourceTypeSmall:
-		return pb.ResourceType_Small
-	case datastore.ResourceTypeMedium:
-		return pb.ResourceType_Medium
-	case datastore.ResourceTypeLarge:
-		return pb.ResourceType_Large
-	case datastore.ResourceTypeXLarge:
-		return pb.ResourceType_XLarge
-	case datastore.ResourceType2XLarge:
-		return pb.ResourceType_XLarge2
-	case datastore.ResourceType3XLarge:
-		return pb.ResourceType_XLarge3
-	case datastore.ResourceType4XLarge:
-		return pb.ResourceType_XLarge4
-	}
-
-	return pb.ResourceType_Unknown
 }
