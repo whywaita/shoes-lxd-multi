@@ -7,13 +7,14 @@ import (
 	"log"
 	"os"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	"github.com/hashicorp/go-plugin"
-	pb "github.com/whywaita/myshoes/api/proto"
+	pb "github.com/whywaita/myshoes/api/proto.go"
 	shoeslxdpb "github.com/whywaita/shoes-lxd-multi/proto.go"
-	"google.golang.org/grpc"
 )
 
 const (
@@ -85,7 +86,7 @@ func (l *LXDMultiPlugin) GRPCServer(broker *plugin.GRPCBroker, s *grpc.Server) e
 
 	grpcConn, err := grpc.Dial(
 		serverEndpoint,
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
 	if err != nil {
@@ -127,7 +128,7 @@ func (l Client) AddInstance(ctx context.Context, req *pb.AddInstanceRequest) (*p
 	slReq := &shoeslxdpb.AddInstanceRequest{
 		RunnerName:   req.RunnerName,
 		SetupScript:  req.SetupScript,
-		ResourceType: shoeslxdpb.ResourceTypeToShoesLXDMultiPb(req.ResourceType),
+		ResourceType: req.ResourceType,
 		TargetHosts:  l.targetHosts,
 		ImageAlias:   l.imageAlias,
 	}
