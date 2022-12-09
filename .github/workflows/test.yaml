@@ -15,14 +15,14 @@ jobs:
           - server
           - shoes-lxd-multi
     steps:
-      - name: Setup go
-        uses: actions/setup-go@v2
-        with:
-          go-version: 1.16.x
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
+      - name: Setup go
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: ${{ matrix.target }}/go.mod
       - name: lint
         run: |
           GO111MODULE=off GOBIN=$(pwd)/bin go get golang.org/x/lint/golint
@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
      - name: Checkout
-       uses: actions/checkout@v2
+       uses: actions/checkout@v3
        with:
          fetch-depth: 1
      - name: docker build

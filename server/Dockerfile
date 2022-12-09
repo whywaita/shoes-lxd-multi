@@ -1,4 +1,4 @@
-FROM golang:1.16 AS builder
+FROM golang:1.19 AS builder
 
 WORKDIR /go/src/github.com/whywaita/shoes-lxd-multi/server
 

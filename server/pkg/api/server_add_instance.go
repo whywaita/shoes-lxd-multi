@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 
+	myshoespb "github.com/whywaita/myshoes/api/proto.go"
+
 	"golang.org/x/sync/errgroup"
 
 	lxd "github.com/lxc/lxd/client"
@@ -100,7 +102,7 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	}, nil
 }
 
-func (s *ShoesLXDMultiServer) getInstanceConfig(setupScript string, rt pb.ResourceType) map[string]string {
+func (s *ShoesLXDMultiServer) getInstanceConfig(setupScript string, rt myshoespb.ResourceType) map[string]string {
 	rawLXCConfig := `lxc.apparmor.profile = unconfined
 lxc.cgroup.devices.allow = a
 lxc.cap.drop=`
