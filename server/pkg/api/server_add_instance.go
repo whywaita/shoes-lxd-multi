@@ -96,9 +96,10 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	}
 
 	return &pb.AddInstanceResponse{
-		CloudId:   i.Name,
-		ShoesType: "lxd",
-		IpAddress: "",
+		CloudId:      i.Name,
+		ShoesType:    "lxd",
+		IpAddress:    "",
+		ResourceType: req.ResourceType,
 	}, nil
 }
 
