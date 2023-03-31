@@ -32,6 +32,7 @@ message AddInstanceResponse {
   string cloud_id = 1;
   string shoes_type = 2;
   string ip_address = 3;
+  whywaita.myshoes.ResourceType resource_type = 4;
 }
 
 message DeleteInstanceRequest { string cloud_id = 1; }

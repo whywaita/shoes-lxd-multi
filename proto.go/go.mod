@@ -3,7 +3,7 @@ module github.com/whywaita/shoes-lxd-multi/proto.go
 go 1.19
 
 require (
-	github.com/whywaita/myshoes v1.12.0
+	github.com/whywaita/myshoes v1.14.0
 	google.golang.org/grpc v1.45.0
 	google.golang.org/protobuf v1.28.0
 )
