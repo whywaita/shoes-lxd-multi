@@ -138,9 +138,10 @@ func (l Client) AddInstance(ctx context.Context, req *pb.AddInstanceRequest) (*p
 		return nil, status.Errorf(codes.Internal, "failed to AddInstance: %+v", err)
 	}
 	return &pb.AddInstanceResponse{
-		CloudId:   slResp.CloudId,
-		ShoesType: slResp.ShoesType,
-		IpAddress: slResp.IpAddress,
+		CloudId:      slResp.CloudId,
+		ShoesType:    slResp.ShoesType,
+		IpAddress:    slResp.IpAddress,
+		ResourceType: slResp.ResourceType,
 	}, nil
 }
 
