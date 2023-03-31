@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/hashicorp/go-plugin v1.4.3
-	github.com/whywaita/myshoes v1.12.0
+	github.com/whywaita/myshoes v1.14.0
 	github.com/whywaita/shoes-lxd-multi/proto.go v0.0.0-20221208053847-fac9f34dd6e1
 	google.golang.org/grpc v1.45.0
 )

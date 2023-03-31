@@ -7,7 +7,7 @@ require (
 	github.com/lxc/lxd v0.0.0-20211202222358-a293da71aeb0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/prometheus/client_golang v1.12.1
-	github.com/whywaita/myshoes v1.12.0
+	github.com/whywaita/myshoes v1.14.0
 	github.com/whywaita/shoes-lxd-multi/proto.go v0.0.0-20221208053847-fac9f34dd6e1
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	google.golang.org/grpc v1.45.0
