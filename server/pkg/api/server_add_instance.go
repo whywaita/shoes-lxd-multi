@@ -218,9 +218,7 @@ func schedule(targets []targetHost, limitOverCommit uint64) (*targetHost, error)
 		return nil, ErrNoValidHost
 	}
 
-	minTargets := getMinTargets(schedulableTargets)
-
-	return &minTargets[rand.Intn(len(minTargets))], nil
+	return &schedulableTargets[rand.Intn(len(schedulableTargets))], nil
 }
 
 // parseAlias parse user input
@@ -258,20 +256,4 @@ func parseAlias(input string) (*api.InstanceSource, error) {
 		Type:  "image",
 		Alias: input,
 	}, nil
-}
-
-func getMinTargets(hosts []targetHost) []targetHost {
-	var minTargets []targetHost
-	// use lowest over-commit instance
-	// if there is more than one the lowest ones, it picks up from them randomly
-	minTargetOverCommit := hosts[0].percentOverCommit
-	for _, t := range hosts {
-		if minTargetOverCommit > t.percentOverCommit {
-			minTargetOverCommit = t.percentOverCommit
-			minTargets = []targetHost{t}
-		} else if minTargetOverCommit == t.percentOverCommit {
-			minTargets = append(minTargets, t)
-		}
-	}
-	return minTargets
 }
