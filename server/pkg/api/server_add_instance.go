@@ -35,6 +35,7 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 		return nil, status.Errorf(codes.InvalidArgument, "failed to parse request name: %+v", err)
 	}
 	instanceName := req.RunnerName
+	instanceType := fmt.Sprintf("flavor-id-%s", req.ResourceType.String())
 
 	instanceSource, err := parseAlias(req.ImageAlias)
 	if err != nil {
@@ -53,61 +54,100 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 
 	var client lxd.InstanceServer
 	if errors.Is(err, ErrInstanceIsNotFound) {
-		s.mu.Lock()
-		host, err := s.scheduleHost(targetLXDHosts)
-		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "failed to schedule host: %+v", err)
-		}
-		log.Printf("AddInstance scheduled host: %s\n", host.HostConfig.LxdHost)
 
-		reqInstance := api.InstancesPost{
-			InstancePut: api.InstancePut{
-				Config: s.getInstanceConfig(req.SetupScript, req.ResourceType),
-			},
-			Name:   instanceName,
-			Source: *instanceSource,
+		flavor, err := s.isExistInstance(targetLXDHosts, instanceType)
+		if err != nil && !errors.Is(err, ErrInstanceIsNotFound) {
+			return nil, status.Errorf(codes.Internal, "failed to get instance: %+v", err)
 		}
+		if errors.Is(err, ErrInstanceIsNotFound) {
+			s.mu.Lock()
+			host, err := s.scheduleHost(targetLXDHosts)
+			if err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, "failed to schedule host: %+v", err)
+			}
+			log.Printf("AddInstance scheduled host: %s\n", host.HostConfig.LxdHost)
 
-		cpu, err := strconv.ParseUint(reqInstance.InstancePut.Config["limits.cpu"], 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("failde to parse limits.cpu: %w", err)
-		}
+			reqInstance := api.InstancesPost{
+				InstancePut: api.InstancePut{
+					Config: s.getInstanceConfig(req.SetupScript, req.ResourceType),
+				},
+				Name:   instanceName,
+				Source: *instanceSource,
+			}
 
-		memory, err := units.FromHumanSize(reqInstance.InstancePut.Config["limits.memory"])
-		if err != nil {
-			return nil, fmt.Errorf("failde to parse limits.memory: %w", err)
-		}
+			cpu, err := strconv.ParseUint(reqInstance.InstancePut.Config["limits.cpu"], 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("failde to parse limits.cpu: %w", err)
+			}
 
-		cache, err := lxdclient.GetStatusCache(host.HostConfig.LxdHost)
-		if err != nil {
-			return nil, err
-		}
-		cache.Resource.CPUUsed += cpu
-		cache.Resource.MemoryUsed += uint64(memory)
-		if err := lxdclient.SetStatusCache(host.HostConfig.LxdHost, cache); err != nil {
-			return nil, fmt.Errorf("failed to set status cache: %s", err)
-		}
-		s.mu.Unlock()
+			memory, err := units.FromHumanSize(reqInstance.InstancePut.Config["limits.memory"])
+			if err != nil {
+				return nil, fmt.Errorf("failde to parse limits.memory: %w", err)
+			}
 
-		client = host.Client
-		op, err := client.CreateInstance(reqInstance)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to create instance: %+v", err)
-		}
-		if err := op.Wait(); err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to wait creating instance: %+v", err)
+			cache, err := lxdclient.GetStatusCache(host.HostConfig.LxdHost)
+			if err != nil {
+				return nil, err
+			}
+			cache.Resource.CPUUsed += cpu
+			cache.Resource.MemoryUsed += uint64(memory)
+			if err := lxdclient.SetStatusCache(host.HostConfig.LxdHost, cache); err != nil {
+				return nil, fmt.Errorf("failed to set status cache: %s", err)
+			}
+			s.mu.Unlock()
+
+			client = host.Client
+			op, err := client.CreateInstance(reqInstance)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to create instance: %+v", err)
+			}
+			if err := op.Wait(); err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to wait creating instance: %+v", err)
+			}
+			reqState := api.InstanceStatePut{
+				Action: "freeze",
+			}
+			op, err = client.UpdateInstanceState(instanceName, reqState, "")
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to freeze instance: %+v", err)
+			}
+			if err := op.Wait(); err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to wait freezing instance: %+v", err)
+			}
+		} else {
+			client = flavor.Client
+			op, err := client.RenameInstance(instanceName, api.InstancePost{Name: instanceName})
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to update instance metadata: %+v", err)
+			}
+			if err := op.Wait(); err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to wait updating instance metadata: %+v", err)
+			}
 		}
 	} else {
 		client = host.Client
+		op, err := client.UpdateInstanceState(
+			instanceName,
+			api.InstanceStatePut{
+				Action: "freeze",
+			}, "",
+		)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to freeze instance: %+v", err)
+		}
+		if err := op.Wait(); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to wait freezing instance: %+v", err)
+		}
 	}
 
-	reqState := api.InstanceStatePut{
-		Action:  "start",
-		Timeout: -1,
-	}
-	op, err := client.UpdateInstanceState(instanceName, reqState, "")
+	op, err := client.UpdateInstanceState(
+		instanceName,
+		api.InstanceStatePut{
+			Action: "unfreeze",
+		}, "",
+	)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to start instance: %+v", err)
+		return nil, status.Errorf(codes.Internal, "failed to unfreeze instance: %+v", err)
 	}
 	if err := op.Wait(); err != nil && !strings.EqualFold(err.Error(), "The instance is already running") {
 		return nil, status.Errorf(codes.Internal, "failed to wait starting instance: %+v", err)
