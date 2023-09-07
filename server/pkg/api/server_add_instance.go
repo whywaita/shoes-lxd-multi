@@ -62,7 +62,8 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 
 		reqInstance := api.InstancesPost{
 			InstancePut: api.InstancePut{
-				Config: s.getInstanceConfig(req.SetupScript, req.ResourceType),
+				Config:  s.getInstanceConfig(req.SetupScript, req.ResourceType),
+				Devices: s.getInstanceDevices(),
 			},
 			Name:   instanceName,
 			Source: *instanceSource,
@@ -144,6 +145,18 @@ lxc.cap.drop=`
 	}
 
 	return instanceConfig
+}
+
+func (s *ShoesLXDMultiServer) getInstanceDevices() map[string]map[string]string {
+	instanceDevices := map[string]map[string]string{
+		"kmsg": {
+			"path":   "/dev/kmsg",
+			"source": "/dev/kmsg",
+			"type":   "unix-char",
+		},
+	}
+
+	return instanceDevices
 }
 
 type targetHost struct {
