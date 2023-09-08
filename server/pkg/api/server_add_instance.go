@@ -22,8 +22,6 @@ import (
 	pb "github.com/whywaita/shoes-lxd-multi/proto.go"
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
 
-	"github.com/docker/go-units"
-
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -67,28 +65,6 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 			Name:   instanceName,
 			Source: *instanceSource,
 		}
-
-		cpu, err := strconv.ParseUint(reqInstance.InstancePut.Config["limits.cpu"], 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("failde to parse limits.cpu: %w", err)
-		}
-
-		memory, err := units.FromHumanSize(reqInstance.InstancePut.Config["limits.memory"])
-		if err != nil {
-			return nil, fmt.Errorf("failde to parse limits.memory: %w", err)
-		}
-
-		s.mu.Lock()
-		cache, err := lxdclient.GetStatusCache(host.HostConfig.LxdHost)
-		if err != nil {
-			return nil, err
-		}
-		cache.Resource.CPUUsed += cpu
-		cache.Resource.MemoryUsed += uint64(memory)
-		if err := lxdclient.SetStatusCache(host.HostConfig.LxdHost, cache); err != nil {
-			return nil, fmt.Errorf("failed to set status cache: %s", err)
-		}
-		s.mu.Unlock()
 
 		client = host.Client
 		op, err := client.CreateInstance(reqInstance)
