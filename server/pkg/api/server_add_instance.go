@@ -53,7 +53,6 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 
 	var client lxd.InstanceServer
 	if errors.Is(err, ErrInstanceIsNotFound) {
-		s.mu.Lock()
 		host, err := s.scheduleHost(targetLXDHosts)
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "failed to schedule host: %+v", err)
@@ -79,6 +78,7 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 			return nil, fmt.Errorf("failde to parse limits.memory: %w", err)
 		}
 
+		s.mu.Lock()
 		cache, err := lxdclient.GetStatusCache(host.HostConfig.LxdHost)
 		if err != nil {
 			return nil, err
