@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/rand"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,8 +22,6 @@ import (
 	"github.com/whywaita/myshoes/pkg/runner"
 	pb "github.com/whywaita/shoes-lxd-multi/proto.go"
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
-
-	"github.com/docker/go-units"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -53,7 +52,6 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 
 	var client lxd.InstanceServer
 	if errors.Is(err, ErrInstanceIsNotFound) {
-		s.mu.Lock()
 		host, err := s.scheduleHost(targetLXDHosts)
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "failed to schedule host: %+v", err)
@@ -68,27 +66,6 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 			Name:   instanceName,
 			Source: *instanceSource,
 		}
-
-		cpu, err := strconv.ParseUint(reqInstance.InstancePut.Config["limits.cpu"], 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("failde to parse limits.cpu: %w", err)
-		}
-
-		memory, err := units.FromHumanSize(reqInstance.InstancePut.Config["limits.memory"])
-		if err != nil {
-			return nil, fmt.Errorf("failde to parse limits.memory: %w", err)
-		}
-
-		cache, err := lxdclient.GetStatusCache(host.HostConfig.LxdHost)
-		if err != nil {
-			return nil, err
-		}
-		cache.Resource.CPUUsed += cpu
-		cache.Resource.MemoryUsed += uint64(memory)
-		if err := lxdclient.SetStatusCache(host.HostConfig.LxdHost, cache); err != nil {
-			return nil, fmt.Errorf("failed to set status cache: %s", err)
-		}
-		s.mu.Unlock()
 
 		client = host.Client
 		op, err := client.CreateInstance(reqInstance)
@@ -231,7 +208,15 @@ func schedule(targets []targetHost, limitOverCommit uint64) (*targetHost, error)
 		return nil, ErrNoValidHost
 	}
 
-	return &schedulableTargets[rand.Intn(len(schedulableTargets))], nil
+	// 1. use lowest over-commit instance
+	// 2. check limit of over-commit
+	sort.SliceStable(schedulableTargets, func(i, j int) bool {
+		// lowest percentOverCommit is first
+		return schedulableTargets[i].percentOverCommit < schedulableTargets[j].percentOverCommit
+	})
+
+	index := rand.Intn(len(schedulableTargets))
+	return &schedulableTargets[index], nil
 }
 
 // parseAlias parse user input

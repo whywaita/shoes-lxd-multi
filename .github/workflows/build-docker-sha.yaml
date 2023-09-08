@@ -28,7 +28,7 @@ jobs:
       - uses: docker/metadata-action@v3
         id: meta
         with:
-          images: ghcr.io/whywaita/shoes-lxd-multi
+          images: ghcr.io/site0801/shoes-lxd-multi
           tags: |
             type=sha
       - name: Build container image
