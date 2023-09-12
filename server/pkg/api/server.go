@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"sync"
 
 	myshoespb "github.com/whywaita/myshoes/api/proto.go"
 	pb "github.com/whywaita/shoes-lxd-multi/proto.go"
@@ -21,8 +20,6 @@ type ShoesLXDMultiServer struct {
 	resourceMapping map[myshoespb.ResourceType]config.Mapping
 
 	overCommitPercent uint64
-
-	mu sync.Mutex
 }
 
 // New create gRPC server
@@ -31,7 +28,6 @@ func New(hostConfigs *config.HostConfigMap, mapping map[myshoespb.ResourceType]c
 		hostConfigs:       hostConfigs,
 		resourceMapping:   mapping,
 		overCommitPercent: overCommitPercent,
-		mu:                sync.Mutex{},
 	}, nil
 }
 

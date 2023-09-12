@@ -23,7 +23,7 @@ type Resource struct {
 
 // GetCPUOverCommitPercent calculate percent of over commit
 func GetCPUOverCommitPercent(in Resource) uint64 {
-	return uint64(float64(in.CPUUsed) / float64(in.CPUTotal) * 100.0)
+	return (in.CPUUsed / in.CPUTotal) * 100
 }
 
 // GetResource get Resource
