@@ -11,6 +11,7 @@ import (
 	slm "github.com/whywaita/shoes-lxd-multi/server/pkg/api"
 )
 
+// ResourceType is resource configuration for pool mode.
 type ResourceType struct {
 	Name string `json:"name"`
 
@@ -20,6 +21,7 @@ type ResourceType struct {
 	PoolCount int `json:"count"`
 }
 
+// LoadResourceTypes loads resource types from environment variable "LXD_MULTI_RESOURCE_TYPES".
 func LoadResourceTypes() ([]ResourceType, error) {
 	env := os.Getenv("LXD_MULTI_RESOURCE_TYPES")
 	if env == "" {
@@ -32,6 +34,7 @@ func LoadResourceTypes() ([]ResourceType, error) {
 	return s, nil
 }
 
+// LoadImageAlias loads image alias from environment variable "LXD_MULTI_IMAGE_ALIAS".
 func LoadImageAlias() (string, api.InstanceSource, error) {
 	env := os.Getenv("LXD_MULTI_IMAGE_ALIAS")
 	if env == "" {
@@ -44,6 +47,7 @@ func LoadImageAlias() (string, api.InstanceSource, error) {
 	return env, *source, nil
 }
 
+// LoadParams loads parameters for pool agent.
 func LoadParams() (checkInterval time.Duration, concurrentCreateLimit int64, waitIdleTime time.Duration, zombieAllowTime time.Duration, err error) {
 	checkInterval, err = loadDurationEnv("LXD_MULTI_CHECK_INTERVAL", 2*time.Second)
 	if err != nil {
