@@ -13,6 +13,7 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
+// Agent is an agent for pool mode.
 type Agent struct {
 	ImageAlias     string
 	InstanceSource api.InstanceSource
@@ -31,6 +32,7 @@ type Agent struct {
 	deletingInstances map[string]struct{}
 }
 
+// Run runs the agent.
 func (a *Agent) Run(ctx context.Context) error {
 	ticker := time.NewTicker(a.CheckInterval)
 
