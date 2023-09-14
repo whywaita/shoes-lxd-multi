@@ -20,14 +20,16 @@ type ShoesLXDMultiServer struct {
 	resourceMapping map[myshoespb.ResourceType]config.Mapping
 
 	overCommitPercent uint64
+	poolMode          bool
 }
 
 // New create gRPC server
-func New(hostConfigs *config.HostConfigMap, mapping map[myshoespb.ResourceType]config.Mapping, overCommitPercent uint64) (*ShoesLXDMultiServer, error) {
+func New(hostConfigs *config.HostConfigMap, mapping map[myshoespb.ResourceType]config.Mapping, overCommitPercent uint64, poolMode bool) (*ShoesLXDMultiServer, error) {
 	return &ShoesLXDMultiServer{
 		hostConfigs:       hostConfigs,
 		resourceMapping:   mapping,
 		overCommitPercent: overCommitPercent,
+		poolMode:          poolMode,
 	}, nil
 }
 

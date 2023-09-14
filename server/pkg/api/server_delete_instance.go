@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/lxc/lxd/shared/api"
-	"github.com/whywaita/myshoes/pkg/runner"
 	pb "github.com/whywaita/shoes-lxd-multi/proto.go"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -16,9 +15,6 @@ import (
 // DeleteInstance delete instance to LXD server
 func (s *ShoesLXDMultiServer) DeleteInstance(ctx context.Context, req *pb.DeleteInstanceRequest) (*pb.DeleteInstanceResponse, error) {
 	log.Printf("DeleteInstance req: %+v\n", req)
-	if _, err := runner.ToUUID(req.CloudId); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "failed to parse request id: %+v", err)
-	}
 	instanceName := req.CloudId
 	targetLXDHosts, err := s.validateTargetHosts(req.TargetHosts)
 	if err != nil {

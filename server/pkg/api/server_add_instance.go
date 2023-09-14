@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	myshoespb "github.com/whywaita/myshoes/api/proto.go"
 
@@ -19,6 +20,7 @@ import (
 	lxd "github.com/lxc/lxd/client"
 	"github.com/lxc/lxd/shared/api"
 
+	"github.com/whywaita/myshoes/pkg/datastore"
 	"github.com/whywaita/myshoes/pkg/runner"
 	pb "github.com/whywaita/shoes-lxd-multi/proto.go"
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
@@ -33,28 +35,118 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	if _, err := runner.ToUUID(req.RunnerName); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to parse request name: %+v", err)
 	}
-	instanceName := req.RunnerName
-
-	instanceSource, err := parseAlias(req.ImageAlias)
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "failed to parse image alias: %+v", err)
-	}
 
 	targetLXDHosts, err := s.validateTargetHosts(req.TargetHosts)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to validate target hosts: %+v", err)
 	}
 
+	var host *lxdclient.LXDHost
+	var instanceName string
+
+	if s.poolMode {
+		host, instanceName, err = s.addInstancePoolMode(targetLXDHosts, req)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		host, instanceName, err = s.addInstanceCreateMode(targetLXDHosts, req)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	i, _, err := host.Client.GetInstance(instanceName)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to retrieve instance information: %+v", err)
+	}
+
+	return &pb.AddInstanceResponse{
+		CloudId:      i.Name,
+		ShoesType:    "lxd",
+		IpAddress:    "",
+		ResourceType: req.ResourceType,
+	}, nil
+}
+
+func (s *ShoesLXDMultiServer) addInstancePoolMode(targets []lxdclient.LXDHost, req *pb.AddInstanceRequest) (*lxdclient.LXDHost, string, error) {
+	host, instanceName, found := findInstanceByJob(targets, req.RunnerName)
+	if !found {
+		resourceTypeName := datastore.UnmarshalResourceTypePb(req.ResourceType).String()
+		retried := 0
+		for {
+			var err error
+			host, instanceName, err = allocatePooledInstance(targets, resourceTypeName, req.ImageAlias, s.overCommitPercent, req.RunnerName)
+			if err != nil {
+				if retried < 10 {
+					retried++
+					log.Printf("AddInstance failed allocating instance (retrying %d...): %+v", retried, err)
+					time.Sleep(1 * time.Second)
+					continue
+				} else {
+					return nil, "", status.Errorf(codes.Internal, "can not allocate instance")
+				}
+			}
+			break
+		}
+	}
+	log.Printf("AddInstance uses instance %q in %q", instanceName, host.HostConfig.LxdHost)
+	client := host.Client
+
+	err := unfreezeInstance(client, instanceName)
+	if err != nil {
+		return nil, "", status.Errorf(codes.Internal, "failed to unfreeze instance: %+v", err)
+	}
+
+	scriptFilename := fmt.Sprintf("/tmp/myshoes_setup_script.%d", rand.Int())
+	err = client.CreateInstanceFile(instanceName, scriptFilename, lxd.InstanceFileArgs{
+		Content:   strings.NewReader(req.SetupScript),
+		Mode:      0744,
+		Type:      "file",
+		WriteMode: "overwrite",
+	})
+	if err != nil {
+		return nil, "", status.Errorf(codes.Internal, "failed to copy setup script: %+v", err)
+	}
+	op, err := client.ExecInstance(instanceName, api.InstanceExecPost{
+		Command: []string{
+			"systemd-run",
+			"--unit", "myshoes-setup",
+			"--property", "After=multi-user.target",
+			"--property", "StandardOutput=journal+console",
+			"--property", fmt.Sprintf("ExecStartPre=/usr/bin/hostnamectl set-hostname %s", req.RunnerName),
+			"--property", fmt.Sprintf("ExecStartPre=/bin/sh -c 'echo 127.0.1.1 %s >> /etc/hosts'", req.RunnerName),
+			scriptFilename,
+		},
+	}, nil)
+	if err != nil {
+		return nil, "", status.Errorf(codes.Internal, "failed to execute setup script: %+v", err)
+	}
+	if err := op.Wait(); err != nil {
+		return nil, "", status.Errorf(codes.Internal, "failed to wait executing setup script: %+v", err)
+	}
+
+	return host, instanceName, nil
+}
+
+func (s *ShoesLXDMultiServer) addInstanceCreateMode(targetLXDHosts []lxdclient.LXDHost, req *pb.AddInstanceRequest) (*lxdclient.LXDHost, string, error) {
+	instanceName := req.RunnerName
+
+	instanceSource, err := parseAlias(req.ImageAlias)
+	if err != nil {
+		return nil, "", status.Errorf(codes.InvalidArgument, "failed to parse image alias: %+v", err)
+	}
+
 	host, err := s.isExistInstance(targetLXDHosts, instanceName)
 	if err != nil && !errors.Is(err, ErrInstanceIsNotFound) {
-		return nil, status.Errorf(codes.Internal, "failed to get instance: %+v", err)
+		return nil, "", status.Errorf(codes.Internal, "failed to get instance: %+v", err)
 	}
 
 	var client lxd.InstanceServer
 	if errors.Is(err, ErrInstanceIsNotFound) {
 		host, err := s.scheduleHost(targetLXDHosts)
 		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "failed to schedule host: %+v", err)
+			return nil, "", status.Errorf(codes.InvalidArgument, "failed to schedule host: %+v", err)
 		}
 		log.Printf("AddInstance scheduled host: %s\n", host.HostConfig.LxdHost)
 
@@ -70,10 +162,10 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 		client = host.Client
 		op, err := client.CreateInstance(reqInstance)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to create instance: %+v", err)
+			return nil, "", status.Errorf(codes.Internal, "failed to create instance: %+v", err)
 		}
 		if err := op.Wait(); err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to wait creating instance: %+v", err)
+			return nil, "", status.Errorf(codes.Internal, "failed to wait creating instance: %+v", err)
 		}
 	} else {
 		client = host.Client
@@ -85,23 +177,13 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	}
 	op, err := client.UpdateInstanceState(instanceName, reqState, "")
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to start instance: %+v", err)
+		return nil, "", status.Errorf(codes.Internal, "failed to start instance: %+v", err)
 	}
 	if err := op.Wait(); err != nil && !strings.EqualFold(err.Error(), "The instance is already running") {
-		return nil, status.Errorf(codes.Internal, "failed to wait starting instance: %+v", err)
+		return nil, "", status.Errorf(codes.Internal, "failed to wait starting instance: %+v", err)
 	}
 
-	i, _, err := client.GetInstance(instanceName)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to retrieve instance information: %+v", err)
-	}
-
-	return &pb.AddInstanceResponse{
-		CloudId:      i.Name,
-		ShoesType:    "lxd",
-		IpAddress:    "",
-		ResourceType: req.ResourceType,
-	}, nil
+	return host, instanceName, nil
 }
 
 func (s *ShoesLXDMultiServer) getInstanceConfig(setupScript string, rt myshoespb.ResourceType) map[string]string {
