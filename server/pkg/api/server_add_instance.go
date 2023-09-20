@@ -142,9 +142,8 @@ func (s *ShoesLXDMultiServer) addInstanceCreateMode(targetLXDHosts []lxdclient.L
 		return nil, "", status.Errorf(codes.Internal, "failed to get instance: %+v", err)
 	}
 
-	var client lxd.InstanceServer
 	if errors.Is(err, ErrInstanceIsNotFound) {
-		host, err := s.scheduleHost(targetLXDHosts)
+		host, err = s.scheduleHost(targetLXDHosts)
 		if err != nil {
 			return nil, "", status.Errorf(codes.InvalidArgument, "failed to schedule host: %+v", err)
 		}
@@ -159,23 +158,20 @@ func (s *ShoesLXDMultiServer) addInstanceCreateMode(targetLXDHosts []lxdclient.L
 			Source: *instanceSource,
 		}
 
-		client = host.Client
-		op, err := client.CreateInstance(reqInstance)
+		op, err := host.Client.CreateInstance(reqInstance)
 		if err != nil {
 			return nil, "", status.Errorf(codes.Internal, "failed to create instance: %+v", err)
 		}
 		if err := op.Wait(); err != nil {
 			return nil, "", status.Errorf(codes.Internal, "failed to wait creating instance: %+v", err)
 		}
-	} else {
-		client = host.Client
 	}
 
 	reqState := api.InstanceStatePut{
 		Action:  "start",
 		Timeout: -1,
 	}
-	op, err := client.UpdateInstanceState(instanceName, reqState, "")
+	op, err := host.Client.UpdateInstanceState(instanceName, reqState, "")
 	if err != nil {
 		return nil, "", status.Errorf(codes.Internal, "failed to start instance: %+v", err)
 	}
