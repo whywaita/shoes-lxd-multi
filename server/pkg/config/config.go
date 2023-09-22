@@ -20,6 +20,8 @@ const (
 	EnvPort = "LXD_MULTI_PORT"
 	// EnvOverCommit will set percent of over commit in CPU
 	EnvOverCommit = "LXD_MULTI_OVER_COMMIT_PERCENT"
+	// EnvMode will set running mode
+	EnvMode = "LXD_MULTI_MODE"
 )
 
 // Mapping is resource mapping
@@ -30,10 +32,10 @@ type Mapping struct {
 }
 
 // Load load config from Environment values
-func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int, uint64, error) {
+func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int, uint64, bool, error) {
 	hostConfigs, err := loadHostConfigs()
 	if err != nil {
-		return nil, nil, -1, 0, fmt.Errorf("failed to load host config: %w", err)
+		return nil, nil, -1, 0, false, fmt.Errorf("failed to load host config: %w", err)
 	}
 
 	envMappingJSON := os.Getenv(EnvLXDResourceTypeMapping)
@@ -41,7 +43,7 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int, uint64, er
 	if envMappingJSON != "" {
 		m, err = readResourceTypeMapping(envMappingJSON)
 		if err != nil {
-			return nil, nil, -1, 0, fmt.Errorf("failed to read %s: %w", EnvLXDResourceTypeMapping, err)
+			return nil, nil, -1, 0, false, fmt.Errorf("failed to read %s: %w", EnvLXDResourceTypeMapping, err)
 		}
 	}
 
@@ -52,7 +54,7 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int, uint64, er
 	} else {
 		port, err = strconv.Atoi(envPort)
 		if err != nil {
-			return nil, nil, -1, 0, fmt.Errorf("failed to parse %s, need to int: %w", EnvPort, err)
+			return nil, nil, -1, 0, false, fmt.Errorf("failed to parse %s, need to int: %w", EnvPort, err)
 		}
 	}
 
@@ -63,11 +65,21 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int, uint64, er
 	} else {
 		overCommitPercent, err = strconv.ParseUint(envOCP, 10, 64)
 		if err != nil {
-			return nil, nil, -1, 0, fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
+			return nil, nil, -1, 0, false, fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
 		}
 	}
 
-	return hostConfigs, m, port, overCommitPercent, nil
+	var poolMode bool
+	switch os.Getenv(EnvMode) {
+	case "", "create":
+		poolMode = false
+	case "pool":
+		poolMode = true
+	default:
+		return nil, nil, -1, 0, false, fmt.Errorf(`unknown mode %q (expected "create" or "pool")`, os.Getenv(EnvMode))
+	}
+
+	return hostConfigs, m, port, overCommitPercent, poolMode, nil
 }
 
 func readResourceTypeMapping(env string) (map[myshoespb.ResourceType]Mapping, error) {

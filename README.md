@@ -6,3 +6,4 @@
 
 - shoes-lxd-multi: shoes-provider
 - server: Server-side
+- pool-agent: stadium agent for pool mode
