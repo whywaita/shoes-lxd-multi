@@ -39,7 +39,7 @@ var (
 	lxdInstance = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, lxdName, "instance"),
 		"LXD instances",
-		[]string{"instance_name", "stadium_name", "cpu", "memory"}, nil,
+		[]string{"instance_name", "stadium_name", "status", "cpu", "memory"}, nil,
 	)
 )
 
@@ -88,14 +88,18 @@ func scrapeLXDHost(ctx context.Context, hostConfigs []config.HostConfig, ch chan
 		}
 
 		for _, instance := range instances {
-			memory, err := units.FromHumanSize(instance.Config["limits.memory"])
-			if err != nil {
-				return fmt.Errorf("failed to convert limits.memory: %w", err)
+			memory := instance.Config["limits.memory"]
+			if memory != "" {
+				size, err := units.FromHumanSize(instance.Config["limits.memory"])
+				if err != nil {
+					return fmt.Errorf("failed to convert limits.memory (instance: %q): %w", instance.Name, err)
+				}
+				memory = strconv.FormatInt(size, 10)
 			}
 
 			ch <- prometheus.MustNewConstMetric(
 				lxdInstance, prometheus.GaugeValue, 1,
-				instance.Name, hostname, instance.Config["limits.cpu"], strconv.FormatInt(memory, 10),
+				instance.Name, hostname, instance.Status, instance.Config["limits.cpu"], memory,
 			)
 		}
 
