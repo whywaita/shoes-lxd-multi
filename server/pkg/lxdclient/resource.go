@@ -164,6 +164,9 @@ func ScrapeLXDHostAllocatedResources(instances []api.Instance) (uint64, uint64, 
 	var allocatedCPU uint64
 	var allocatedMemory uint64
 	for _, instance := range instances {
+		if instance.StatusCode == api.Frozen {
+			continue
+		}
 		instanceCPU := instance.Config["limits.cpu"]
 		if instanceCPU != "" {
 			cpu, err := strconv.Atoi(instance.Config["limits.cpu"])
