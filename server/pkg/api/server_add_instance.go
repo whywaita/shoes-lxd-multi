@@ -52,11 +52,11 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 
 	var client lxd.InstanceServer
 	if errors.Is(err, ErrInstanceIsNotFound) {
-		host, err := s.scheduleHost(targetLXDHosts)
+		host, err = s.scheduleHost(targetLXDHosts)
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "failed to schedule host: %+v", err)
 		}
-		log.Printf("AddInstance scheduled host: %s\n", host.HostConfig.LxdHost)
+		log.Printf("AddInstance scheduled host: %s, runnerName: %s\n", host.HostConfig.LxdHost, instanceName)
 
 		reqInstance := api.InstancesPost{
 			InstancePut: api.InstancePut{
@@ -95,6 +95,7 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to retrieve instance information: %+v", err)
 	}
+	log.Printf("Success AddInstance host: %s, runnerName: %s\n", host.HostConfig.LxdHost, i.Name)
 
 	return &pb.AddInstanceResponse{
 		CloudId:      i.Name,
