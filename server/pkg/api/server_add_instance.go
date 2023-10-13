@@ -86,6 +86,7 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to retrieve instance information: %+v", err)
 	}
+	log.Printf("Success AddInstance host: %s, runnerName: %s\n", host.HostConfig.LxdHost, i.Name)
 
 	return &pb.AddInstanceResponse{
 		CloudId:      i.Name,
@@ -103,7 +104,7 @@ func (s *ShoesLXDMultiServer) setLXDStatusCache(targetLXDHosts []lxdclient.LXDHo
 	if err != nil {
 		return nil, api.InstancesPost{}, status.Errorf(codes.InvalidArgument, "failed to schedule host: %+v", err)
 	}
-	log.Printf("AddInstance scheduled host: %s\n", host.HostConfig.LxdHost)
+	log.Printf("AddInstance scheduled host: %s, runnerName: %s\n", host.HostConfig.LxdHost, instanceName)
 
 	reqInstance := api.InstancesPost{
 		InstancePut: api.InstancePut{
