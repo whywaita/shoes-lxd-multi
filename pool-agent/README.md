@@ -4,24 +4,22 @@ Stadium Agent for pool mode
 
 ## Setup
 
-- `LXD_MULTI_RESOURCE_TYPES`
+configuration file format is toml
 
-```json
-[
-  {
-    "name": "nano",
-    "cpu": 1,
-    "memory": "1GB",
-    "count": 3
-  },
-  {
-    "name": "micro",
-    "cpu": 2,
-    "memory": "2GB",
-    "count": 1
-  },
-  ...
-]
+```toml
+["https://127.0.0.1:8443"]
+    cert_path = "cert.pem"
+    key_path = "key.pem"
+    [["https://127.0.0.1:8443".resource_types]]
+    name = "nano"
+    cpu = 1
+    memory = "1GB"
+    count = 3
+    [["https://127.0.0.1:8443".resource_types]]
+    name = "micro"
+    cpu = 2
+    memory = "2GB"
+    count = 1
 ```
 
 - `LXD_MULTI_IMAGE_ALIAS`
@@ -29,9 +27,6 @@ Stadium Agent for pool mode
 
 ### Optional values
 
-- `LXD_SOCKET`
-    - Path to LXD socket
-    - default: `/var/lib/lxd/unix.socket`
 - `LXD_MULTI_CHECK_INTERVAL`
     - Interval to check instances
     - default: `2s`

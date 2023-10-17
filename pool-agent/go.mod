@@ -6,6 +6,9 @@ toolchain go1.22.2
 
 require (
 	github.com/lxc/lxd v0.0.0-20211202222358-a293da71aeb0
+	github.com/pelletier/go-toml/v2 v2.2.1
+	github.com/pkg/errors v0.9.1
+	github.com/spf13/cobra v1.2.1
 	github.com/whywaita/shoes-lxd-multi/server v0.0.0-20240416053912-6df6153e11ef
 	golang.org/x/sync v0.6.0
 )
@@ -27,20 +30,21 @@ require (
 	github.com/hashicorp/go-plugin v1.4.3 // indirect
 	github.com/hashicorp/go-version v1.4.0 // indirect
 	github.com/hashicorp/yamux v0.0.0-20180604194846-3520598351bb // indirect
+	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/juju/webbrowser v1.0.0 // indirect
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/m4ns0ur/httpcache v0.0.0-20200426190423-1040e2e8823f // indirect
 	github.com/mattn/go-colorable v0.1.11 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
-	github.com/mitchellh/go-testing-interface v0.0.0-20171004221916-a61a99592b77 // indirect
+	github.com/mitchellh/go-testing-interface v1.0.0 // indirect
 	github.com/oklog/run v1.0.0 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/pborman/uuid v1.2.1 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/rogpeppe/fastuuid v1.2.0 // indirect
 	github.com/satori/go.uuid v1.2.0 // indirect
+	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/whywaita/myshoes v1.14.0 // indirect
 	github.com/whywaita/shoes-lxd-multi/proto.go v0.0.0-20230331051154-d763b94b0dd7 // indirect
 	github.com/whywaita/xsemaphore v0.0.0-20240305080042-cf6ba671d2e7 // indirect

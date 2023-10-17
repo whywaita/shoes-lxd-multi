@@ -1,7 +1,6 @@
-package main
+package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -9,26 +8,32 @@ import (
 
 	"github.com/lxc/lxd/shared/api"
 	slm "github.com/whywaita/shoes-lxd-multi/server/pkg/api"
+	"github.com/pelletier/go-toml/v2"
 )
 
 // ResourceType is resource configuration for pool mode.
+type ConfigMap map[string]struct {
+	ResouceTypes []ResourceType `toml:"resource_types"`
+	CertPath     string         `toml:"cert_path"`
+	KeyPath      string         `toml:"key_path"`
+}
 type ResourceType struct {
-	Name string `json:"name"`
+	Name string `toml:"name"`
 
-	CPUCore int    `json:"cpu"`
-	Memory  string `json:"memory"`
+	CPUCore int    `toml:"cpu"`
+	Memory  string `toml:"memory"`
 
-	PoolCount int `json:"count"`
+	PoolCount int `toml:"count"`
 }
 
-// LoadResourceTypes loads resource types from environment variable "LXD_MULTI_RESOURCE_TYPES".
-func LoadResourceTypes() ([]ResourceType, error) {
-	env := os.Getenv("LXD_MULTI_RESOURCE_TYPES")
-	if env == "" {
-		return nil, fmt.Errorf("LXD_MULTI_RESOURCE_TYPES is not set")
+// LoadConfig LoadConfig loads config from configPath
+func LoadConfig() (ConfigMap, error) {
+	f, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed read config file: %w", err)
 	}
-	var s []ResourceType
-	if err := json.Unmarshal([]byte(env), &s); err != nil {
+	var s ConfigMap
+	if err := toml.Unmarshal(f, &s); err != nil {
 		return nil, fmt.Errorf("parse LXD_MULTI_RESOURCE_TYPES: %w", err)
 	}
 	return s, nil
