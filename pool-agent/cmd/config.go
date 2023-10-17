@@ -11,12 +11,14 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-// ResourceType is resource configuration for pool mode.
+// ConfigMap is config map for pool agent.
 type ConfigMap map[string]struct {
 	ResouceTypes []ResourceType `toml:"resource_types"`
 	CertPath     string         `toml:"cert_path"`
 	KeyPath      string         `toml:"key_path"`
 }
+
+// ResourceType is resource configuration for pool mode.
 type ResourceType struct {
 	Name string `toml:"name"`
 
