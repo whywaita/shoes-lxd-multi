@@ -1,4 +1,4 @@
-package main
+package cmd
 
 const (
 	configKeyResourceType = "user.myshoes_resource_type"
