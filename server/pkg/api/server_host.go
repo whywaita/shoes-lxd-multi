@@ -24,27 +24,28 @@ func (s *ShoesLXDMultiServer) isExistInstance(targetLXDHosts []lxdclient.LXDHost
 	foundHost = nil
 
 	for _, host := range targetLXDHosts {
-		host := host
-		eg.Go(func() error {
-			l := logger.With("host", host.HostConfig.LxdHost)
-			err := isExistInstanceWithTimeout(host, instanceName)
-			if err != nil {
-				switch {
-				case errors.Is(err, ErrInstanceIsNotFound):
-					// not found instance, It's a many case in this. so ignore this host
-					return nil
-				case errors.Is(err, ErrTimeoutGetInstance):
-					l.Warn("failed to get instance (reach timeout), So ignore host", "err", err.Error())
-					return nil
-				default:
-					l.Warn("failed to get instance", "err", err.Error())
-					return nil
+		func(host lxdclient.LXDHost) {
+			eg.Go(func() error {
+				l := logger.With("host", host.HostConfig.LxdHost)
+				err := isExistInstanceWithTimeout(host, instanceName)
+				if err != nil {
+					switch {
+					case errors.Is(err, ErrInstanceIsNotFound):
+						// not found instance, It's a many case in this. so ignore this host
+						return nil
+					case errors.Is(err, ErrTimeoutGetInstance):
+						l.Warn("failed to get instance (reach timeout), So ignore host", "err", err.Error())
+						return nil
+					default:
+						l.Warn("failed to get instance", "err", err.Error())
+						return nil
+					}
 				}
-			}
 
-			foundHost = &host
-			return nil
-		})
+				foundHost = &host
+				return nil
+			})
+		}(host)
 	}
 
 	if err := eg.Wait(); err != nil {

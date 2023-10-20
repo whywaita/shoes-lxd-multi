@@ -23,16 +23,15 @@ const (
 	configKeyAllocatedAt  = "user.myshoes_allocated_at"
 )
 
-func getInstancesWithTimeout(c lxd.InstanceServer, d time.Duration) (s []api.Instance, overCommitPercent uint64, err error) {
+func getInstancesWithTimeout(h lxdclient.LXDHost, d time.Duration) (s []api.Instance, overCommitPercent uint64, err error) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		s, err = c.GetInstances(api.InstanceTypeAny)
+		s, err = lxdclient.GetAnyInstances(h.Client)
 		if err != nil {
 			return
 		}
-		var r *api.Resources
-		r, err = c.GetServerResources()
+		r, err := lxdclient.GetResource(h.HostConfig)
 		if err != nil {
 			return
 		}
@@ -48,12 +47,12 @@ func getInstancesWithTimeout(c lxd.InstanceServer, d time.Duration) (s []api.Ins
 			}
 			cpu, err := strconv.Atoi(i.Config["limits.cpu"])
 			if err != nil {
-				err = fmt.Errorf("failed to parse limits.cpu: %w", err)
+				fmt.Errorf("failed to parse limits.cpu: %w", err)
 				return
 			}
 			used += uint64(cpu)
 		}
-		overCommitPercent = uint64(float64(used) / float64(r.CPU.Total) * 100)
+		overCommitPercent = uint64(float64(used) / float64(r.CPUTotal) * 100)
 	}()
 	select {
 	case <-done:
@@ -82,7 +81,7 @@ func findInstances(targets []lxdclient.LXDHost, match func(api.Instance) bool, l
 		go func(i int, target lxdclient.LXDHost) {
 			defer wg.Done()
 
-			s, overCommitPercent, err := getInstancesWithTimeout(target.Client, 10*time.Second)
+			s, overCommitPercent, err := getInstancesWithTimeout(target, 10*time.Second)
 			if err != nil {
 				log.Printf("failed to find instance in host %q: %+v", target.HostConfig.LxdHost, err)
 				return
