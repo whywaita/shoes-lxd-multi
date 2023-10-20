@@ -24,11 +24,6 @@ var agentRunCommand = &cobra.Command{
 			return err
 		}
 
-		imageAlias, source, err := LoadImageAlias()
-		if err != nil {
-			return err
-		}
-
 		checkInterval, concurrentCreateLimit, waitIdleTime, zombieAllowTime, err := LoadParams()
 		if err != nil {
 			return err
@@ -37,6 +32,11 @@ var agentRunCommand = &cobra.Command{
 		var agents []*Agent
 
 		for stadium, conf := range configMap {
+			source, err := ParseImageAlias(conf.ImageAlias)
+			if err != nil {
+				return err
+			}
+
 			lxdClientCert, err := os.ReadFile(conf.CertPath)
 			if err != nil {
 				return err
@@ -57,7 +57,7 @@ var agentRunCommand = &cobra.Command{
 				return errors.Wrap(err, "failed to connect lxd")
 			}
 			agent := &Agent{
-				ImageAlias:     imageAlias,
+				ImageAlias:     conf.ImageAlias,
 				InstanceSource: source,
 
 				ResourceTypes: conf.ResouceTypes,

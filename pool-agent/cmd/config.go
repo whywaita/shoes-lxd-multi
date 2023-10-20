@@ -13,6 +13,7 @@ import (
 
 // ConfigMap is config map for pool agent.
 type ConfigMap map[string]struct {
+	ImageAlias   string         `toml:"image_alias"`
 	ResouceTypes []ResourceType `toml:"resource_types"`
 	CertPath     string         `toml:"cert_path"`
 	KeyPath      string         `toml:"key_path"`
@@ -36,7 +37,7 @@ func LoadConfig() (ConfigMap, error) {
 	}
 	var s ConfigMap
 	if err := toml.Unmarshal(f, &s); err != nil {
-		return nil, fmt.Errorf("parse LXD_MULTI_RESOURCE_TYPES: %w", err)
+		return nil, fmt.Errorf("parse config file: %w", err)
 	}
 	return s, nil
 }
