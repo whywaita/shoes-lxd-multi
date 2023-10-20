@@ -82,7 +82,7 @@ func findInstances(targets []lxdclient.LXDHost, match func(api.Instance) bool, l
 		go func(i int, target lxdclient.LXDHost) {
 			defer wg.Done()
 
-			s, overCommitPercent, err := getInstancesWithTimeout(target.Client, 2*time.Second)
+			s, overCommitPercent, err := getInstancesWithTimeout(target.Client, 10*time.Second)
 			if err != nil {
 				log.Printf("failed to find instance in host %q: %+v", target.HostConfig.LxdHost, err)
 				return
