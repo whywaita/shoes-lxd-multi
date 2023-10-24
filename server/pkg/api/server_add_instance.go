@@ -7,7 +7,6 @@ import (
 	"log"
 	"math/rand"
 	"net/url"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,6 +21,8 @@ import (
 	"github.com/whywaita/myshoes/pkg/runner"
 	pb "github.com/whywaita/shoes-lxd-multi/proto.go"
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
+
+	"github.com/docker/go-units"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -51,22 +52,12 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	}
 
 	var client lxd.InstanceServer
+	var reqInstance api.InstancesPost
 	if errors.Is(err, ErrInstanceIsNotFound) {
-		host, err = s.scheduleHost(targetLXDHosts)
+		host, reqInstance, err = s.setLXDStatusCache(targetLXDHosts, instanceName, instanceSource, req)
 		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "failed to schedule host: %+v", err)
+			return nil, err
 		}
-		log.Printf("AddInstance scheduled host: %s, runnerName: %s\n", host.HostConfig.LxdHost, instanceName)
-
-		reqInstance := api.InstancesPost{
-			InstancePut: api.InstancePut{
-				Config:  s.getInstanceConfig(req.SetupScript, req.ResourceType),
-				Devices: s.getInstanceDevices(),
-			},
-			Name:   instanceName,
-			Source: *instanceSource,
-		}
-
 		client = host.Client
 		op, err := client.CreateInstance(reqInstance)
 		if err != nil {
@@ -103,6 +94,47 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 		IpAddress:    "",
 		ResourceType: req.ResourceType,
 	}, nil
+}
+
+func (s *ShoesLXDMultiServer) setLXDStatusCache(targetLXDHosts []lxdclient.LXDHost, instanceName string, instanceSource *api.InstanceSource, req *pb.AddInstanceRequest) (*lxdclient.LXDHost, api.InstancesPost, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	host, err := s.scheduleHost(targetLXDHosts)
+	if err != nil {
+		return nil, api.InstancesPost{}, status.Errorf(codes.InvalidArgument, "failed to schedule host: %+v", err)
+	}
+	log.Printf("AddInstance scheduled host: %s, runnerName: %s\n", host.HostConfig.LxdHost, instanceName)
+
+	reqInstance := api.InstancesPost{
+		InstancePut: api.InstancePut{
+			Config:  s.getInstanceConfig(req.SetupScript, req.ResourceType),
+			Devices: s.getInstanceDevices(),
+		},
+		Name:   instanceName,
+		Source: *instanceSource,
+	}
+
+	cpu, err := strconv.ParseUint(reqInstance.InstancePut.Config["limits.cpu"], 10, 64)
+	if err != nil {
+		return nil, api.InstancesPost{}, fmt.Errorf("failde to parse limits.cpu: %w", err)
+	}
+
+	memory, err := units.FromHumanSize(reqInstance.InstancePut.Config["limits.memory"])
+	if err != nil {
+		return nil, api.InstancesPost{}, fmt.Errorf("failde to parse limits.memory: %w", err)
+	}
+
+	cache, err := lxdclient.GetStatusCache(host.HostConfig.LxdHost)
+	if err != nil {
+		return nil, api.InstancesPost{}, err
+	}
+	cache.Resource.CPUUsed += cpu
+	cache.Resource.MemoryUsed += uint64(memory)
+	if err := lxdclient.SetStatusCache(host.HostConfig.LxdHost, cache); err != nil {
+		return nil, api.InstancesPost{}, fmt.Errorf("failed to set status cache: %s", err)
+	}
+	return host, reqInstance, nil
 }
 
 func (s *ShoesLXDMultiServer) getInstanceConfig(setupScript string, rt myshoespb.ResourceType) map[string]string {
@@ -209,15 +241,7 @@ func schedule(targets []targetHost, limitOverCommit uint64) (*targetHost, error)
 		return nil, ErrNoValidHost
 	}
 
-	// 1. use lowest over-commit instance
-	// 2. check limit of over-commit
-	sort.SliceStable(schedulableTargets, func(i, j int) bool {
-		// lowest percentOverCommit is first
-		return schedulableTargets[i].percentOverCommit < schedulableTargets[j].percentOverCommit
-	})
-
-	index := rand.Intn(len(schedulableTargets))
-	return &schedulableTargets[index], nil
+	return &schedulableTargets[rand.Intn(len(schedulableTargets))], nil
 }
 
 // parseAlias parse user input

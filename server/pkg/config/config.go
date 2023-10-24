@@ -16,6 +16,8 @@ const (
 
 	// EnvLXDResourceTypeMapping is mapping resource in lxd
 	EnvLXDResourceTypeMapping = "LXD_MULTI_RESOURCE_TYPE_MAPPING"
+	// EnvLXDResourceCachePeriodSec is period of setting LXD resource cache
+	EnvLXDResourceCachePeriodSec = "LXD_MULTI_RESOURCE_CACHE_PERIOD_SEC"
 	// EnvPort will listen port
 	EnvPort = "LXD_MULTI_PORT"
 	// EnvOverCommit will set percent of over commit in CPU
@@ -30,10 +32,10 @@ type Mapping struct {
 }
 
 // Load load config from Environment values
-func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int, uint64, error) {
+func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int64, int, uint64, error) {
 	hostConfigs, err := loadHostConfigs()
 	if err != nil {
-		return nil, nil, -1, 0, fmt.Errorf("failed to load host config: %w", err)
+		return nil, nil, 0, -1, 0, fmt.Errorf("failed to load host config: %w", err)
 	}
 
 	envMappingJSON := os.Getenv(EnvLXDResourceTypeMapping)
@@ -41,7 +43,18 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int, uint64, er
 	if envMappingJSON != "" {
 		m, err = readResourceTypeMapping(envMappingJSON)
 		if err != nil {
-			return nil, nil, -1, 0, fmt.Errorf("failed to read %s: %w", EnvLXDResourceTypeMapping, err)
+			return nil, nil, 0, -1, 0, fmt.Errorf("failed to read %s: %w", EnvLXDResourceTypeMapping, err)
+		}
+	}
+
+	envPeriodSec := os.Getenv(EnvLXDResourceCachePeriodSec)
+	var periodSec int64
+	if envPeriodSec == "" {
+		periodSec = 10
+	} else {
+		periodSec, err = strconv.ParseInt(envPeriodSec, 10, 64)
+		if err != nil {
+			return nil, nil, 0, -1, 0, fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
 		}
 	}
 
@@ -52,7 +65,7 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int, uint64, er
 	} else {
 		port, err = strconv.Atoi(envPort)
 		if err != nil {
-			return nil, nil, -1, 0, fmt.Errorf("failed to parse %s, need to int: %w", EnvPort, err)
+			return nil, nil, 0, -1, 0, fmt.Errorf("failed to parse %s, need to int: %w", EnvPort, err)
 		}
 	}
 
@@ -63,11 +76,11 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int, uint64, er
 	} else {
 		overCommitPercent, err = strconv.ParseUint(envOCP, 10, 64)
 		if err != nil {
-			return nil, nil, -1, 0, fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
+			return nil, nil, 0, -1, 0, fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
 		}
 	}
 
-	return hostConfigs, m, port, overCommitPercent, nil
+	return hostConfigs, m, periodSec, port, overCommitPercent, nil
 }
 
 func readResourceTypeMapping(env string) (map[myshoespb.ResourceType]Mapping, error) {
