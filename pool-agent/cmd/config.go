@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/lxc/lxd/shared/api"
@@ -12,32 +11,32 @@ import (
 )
 
 // ConfigMap is config map for pool agent.
-type ConfigMap map[string]struct {
-	ImageAlias   string         `toml:"image_alias"`
-	ResouceTypes []ResourceType `toml:"resource_types"`
-	CertPath     string         `toml:"cert_path"`
-	KeyPath      string         `toml:"key_path"`
+type Config struct {
+	ImageAlias          string              `toml:"image_alias"`
+	ResourceTypesMap    []ResourceTypesMap  `toml:"resource_types_map"`
+	ResourceTypesCounts ResourceTypesCounts `toml:"resource_types_counts"`
 }
 
-// ResourceType is resource configuration for pool mode.
-type ResourceType struct {
+// ResourcesTypeMap is resource configuration for pool mode.
+type ResourceTypesMap struct {
 	Name string `toml:"name"`
 
 	CPUCore int    `toml:"cpu"`
 	Memory  string `toml:"memory"`
-
-	PoolCount int `toml:"count"`
 }
 
+// ResourceTypesCounts is counts for resouce types.
+type ResourceTypesCounts map[string]int
+
 // LoadConfig LoadConfig loads config from configPath
-func LoadConfig() (ConfigMap, error) {
+func LoadConfig() (Config, error) {
 	f, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed read config file: %w", err)
+		return Config{}, fmt.Errorf("failed read config file: %w", err)
 	}
-	var s ConfigMap
+	var s Config
 	if err := toml.Unmarshal(f, &s); err != nil {
-		return nil, fmt.Errorf("parse config file: %w", err)
+		return Config{}, fmt.Errorf("parse config file: %w", err)
 	}
 	return s, nil
 }
@@ -56,7 +55,7 @@ func LoadImageAlias() (string, api.InstanceSource, error) {
 }
 
 // LoadParams loads parameters for pool agent.
-func LoadParams() (checkInterval time.Duration, concurrentCreateLimit int64, waitIdleTime time.Duration, zombieAllowTime time.Duration, err error) {
+func LoadParams() (checkInterval time.Duration, waitIdleTime time.Duration, zombieAllowTime time.Duration, err error) {
 	checkInterval, err = loadDurationEnv("LXD_MULTI_CHECK_INTERVAL", 2*time.Second)
 	if err != nil {
 		return
@@ -68,15 +67,6 @@ func LoadParams() (checkInterval time.Duration, concurrentCreateLimit int64, wai
 	zombieAllowTime, err = loadDurationEnv("LXD_MULTI_ZOMBIE_ALLOW_TIME", 5*time.Minute)
 	if err != nil {
 		return
-	}
-
-	if env := os.Getenv("LXD_MULTI_CONCURRENT_CREATE_LIMIT"); env != "" {
-		concurrentCreateLimit, err = strconv.ParseInt(env, 10, 64)
-		if err != nil {
-			return
-		}
-	} else {
-		concurrentCreateLimit = 3
 	}
 
 	return

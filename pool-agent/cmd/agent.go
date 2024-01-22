@@ -5,12 +5,12 @@ import (
 	"crypto/rand"
 	"fmt"
 	"log"
-	"sync"
 	"time"
 
 	lxd "github.com/lxc/lxd/client"
 	"github.com/lxc/lxd/shared/api"
-	"golang.org/x/sync/semaphore"
+	"github.com/pkg/errors"
+	slm "github.com/whywaita/shoes-lxd-multi/server/pkg/api"
 )
 
 // Agent is an agent for pool mode.
@@ -18,34 +18,61 @@ type Agent struct {
 	ImageAlias     string
 	InstanceSource api.InstanceSource
 
-	ResourceTypes []ResourceType
-	Client        lxd.InstanceServer
+	ResourceTypesMap   []ResourceTypesMap
+	ResouceTypesCounts ResourceTypesCounts
+	Client             lxd.InstanceServer
 
-	CheckInterval         time.Duration
-	ConcurrentCreateLimit int64
-	WaitIdleTime          time.Duration
-	ZombieAllowTime       time.Duration
+	CheckInterval   time.Duration
+	WaitIdleTime    time.Duration
+	ZombieAllowTime time.Duration
 
-	wg                *sync.WaitGroup
-	createLimit       *semaphore.Weighted
-	creatingInstances map[string]map[string]struct{}
-	deletingInstances map[string]struct{}
+	creatingInstances map[string]instances
+	deletingInstances instances
+}
+
+type instances map[string]struct{}
+
+func newAgent(conf Config) (*Agent, error) {
+	source, err := slm.ParseAlias(conf.ImageAlias)
+	if err != nil {
+		return nil, err
+	}
+	c, err := lxd.ConnectLXDUnix("", &lxd.ConnectionArgs{})
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to connect lxd")
+	}
+	checkInterval, waitIdleTime, zombieAllowTime, err := LoadParams()
+	if err != nil {
+		return nil, err
+	}
+	creatingInstances := make(map[string]instances)
+	for _, rt := range conf.ResourceTypesMap {
+		creatingInstances[rt.Name] = make(instances)
+	}
+	agent := &Agent{
+		ImageAlias:     conf.ImageAlias,
+		InstanceSource: *source,
+
+		ResourceTypesMap:   conf.ResourceTypesMap,
+		ResouceTypesCounts: conf.ResourceTypesCounts,
+		Client:             c,
+
+		CheckInterval:   checkInterval,
+		WaitIdleTime:    waitIdleTime,
+		ZombieAllowTime: zombieAllowTime,
+
+		creatingInstances: creatingInstances,
+		deletingInstances: make(instances),
+	}
+	return agent, nil
 }
 
 // Run runs the agent.
 func (a *Agent) Run(ctx context.Context) error {
 	ticker := time.NewTicker(a.CheckInterval)
+	defer ticker.Stop()
 
-	a.wg = new(sync.WaitGroup)
-	a.createLimit = semaphore.NewWeighted(a.ConcurrentCreateLimit)
-	a.deletingInstances = make(map[string]struct{})
-
-	a.creatingInstances = make(map[string]map[string]struct{}, len(a.ResourceTypes))
-	for _, rt := range a.ResourceTypes {
-		a.creatingInstances[rt.Name] = make(map[string]struct{})
-	}
-
-	log.Printf("Started agent")
+	log.Println("Started agent")
 
 	for {
 		select {
@@ -55,8 +82,7 @@ func (a *Agent) Run(ctx context.Context) error {
 			}
 		case <-ctx.Done():
 			log.Printf("Stopping agent...")
-			a.wg.Wait()
-			return ctx.Err()
+			return nil
 		}
 	}
 }
@@ -96,12 +122,16 @@ func (a *Agent) checkInstances(ctx context.Context) error {
 		return fmt.Errorf("get instances: %w", err)
 	}
 
-	for _, rt := range a.ResourceTypes {
+	for _, rt := range a.ResourceTypesMap {
 		current := a.countPooledInstances(s, rt.Name)
 		creating := len(a.creatingInstances[rt.Name])
-		createCount := rt.PoolCount - current - creating
+		rtCount, ok := a.ResouceTypesCounts[rt.Name]
+		if !ok {
+			return fmt.Errorf("get resource counts: %w", err)
+		}
+		createCount := rtCount - current - creating
 		if createCount < 1 {
-			continue
+			return nil
 		}
 		log.Printf("Create %d instances for %q", createCount, rt.Name)
 		for i := 0; i < createCount; i++ {
@@ -110,26 +140,20 @@ func (a *Agent) checkInstances(ctx context.Context) error {
 				return fmt.Errorf("generate instance name: %w", err)
 			}
 			a.creatingInstances[rt.Name][name] = struct{}{}
-			go func(name string, rt ResourceType) {
-				a.createLimit.Acquire(context.Background(), 1)
-				defer a.createLimit.Release(1)
 
-				defer delete(a.creatingInstances[rt.Name], name)
+			defer delete(a.creatingInstances[rt.Name], name)
 
-				a.wg.Add(1)
-				defer a.wg.Done()
-				select {
-				case <-ctx.Done():
-					// context cancelled, stop creating immediately
-					return
-				default:
-					// context is not cancelled, continue
-				}
+			select {
+			case <-ctx.Done():
+				// context cancelled, stop creating immediately
+				return nil
+			default:
+				// context is not cancelled, continue
+			}
 
-				if err := a.createInstance(name, rt); err != nil {
-					log.Printf("failed to create instance %q: %+v", name, err)
-				}
-			}(name, rt)
+			if err := a.createInstance(name, rt); err != nil {
+				log.Printf("failed to create instance %q: %+v", name, err)
+			}
 		}
 	}
 
@@ -140,16 +164,12 @@ func (a *Agent) checkInstances(ctx context.Context) error {
 			}
 			log.Printf("Deleting zombie instance %q...", i.Name)
 			a.deletingInstances[i.Name] = struct{}{}
-			a.wg.Add(1)
-			go func(i api.Instance) {
-				defer a.wg.Done()
-				defer delete(a.deletingInstances, i.Name)
+			defer delete(a.deletingInstances, i.Name)
 
-				if err := a.deleteZombieInstance(i); err != nil {
-					log.Printf("failed to delete zombie instance %q: %+v", i.Name, err)
-				}
-				log.Printf("Deleted zombie instance %q", i.Name)
-			}(i)
+			if err := a.deleteZombieInstance(i); err != nil {
+				log.Printf("failed to delete zombie instance %q: %+v", i.Name, err)
+			}
+			log.Printf("Deleted zombie instance %q", i.Name)
 		}
 	}
 

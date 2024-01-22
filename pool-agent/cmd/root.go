@@ -13,7 +13,6 @@ var rootCmd = &cobra.Command{
 
 var (
 	configPath string
-	inSecure   bool
 )
 
 // Execute executes the root command.
@@ -26,5 +25,4 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "/etc/pool-agent/config.toml", "config file path")
-	rootCmd.PersistentFlags().BoolVarP(&inSecure, "insecure", "k", false, "allow insecure server connections when using SSL")
 }
