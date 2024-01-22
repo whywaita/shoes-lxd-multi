@@ -88,7 +88,7 @@ func (a *Agent) Run(ctx context.Context) error {
 }
 
 func (a *Agent) countPooledInstances(instances []api.Instance, resourceTypeName string) int {
-	var count int
+	count := 0
 	for _, i := range instances {
 		if i.StatusCode != api.Frozen {
 			continue
@@ -131,7 +131,7 @@ func (a *Agent) checkInstances(ctx context.Context) error {
 		}
 		createCount := rtCount - current - creating
 		if createCount < 1 {
-			return nil
+			continue
 		}
 		log.Printf("Create %d instances for %q", createCount, rt.Name)
 		for i := 0; i < createCount; i++ {
@@ -142,14 +142,6 @@ func (a *Agent) checkInstances(ctx context.Context) error {
 			a.creatingInstances[rt.Name][name] = struct{}{}
 
 			defer delete(a.creatingInstances[rt.Name], name)
-
-			select {
-			case <-ctx.Done():
-				// context cancelled, stop creating immediately
-				return nil
-			default:
-				// context is not cancelled, continue
-			}
 
 			if err := a.createInstance(name, rt); err != nil {
 				log.Printf("failed to create instance %q: %+v", name, err)

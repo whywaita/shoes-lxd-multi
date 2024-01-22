@@ -55,21 +55,21 @@ func LoadImageAlias() (string, api.InstanceSource, error) {
 }
 
 // LoadParams loads parameters for pool agent.
-func LoadParams() (checkInterval time.Duration, waitIdleTime time.Duration, zombieAllowTime time.Duration, err error) {
-	checkInterval, err = loadDurationEnv("LXD_MULTI_CHECK_INTERVAL", 2*time.Second)
+func LoadParams() (time.Duration, time.Duration, time.Duration, error) {
+	checkInterval, err := loadDurationEnv("LXD_MULTI_CHECK_INTERVAL", 5*time.Second)
 	if err != nil {
-		return
+		return 0, 0, 0, err
 	}
-	waitIdleTime, err = loadDurationEnv("LXD_MULTI_WAIT_IDLE_TIME", 5*time.Second)
+	waitIdleTime, err := loadDurationEnv("LXD_MULTI_WAIT_IDLE_TIME", 5*time.Second)
 	if err != nil {
-		return
+		return 0, 0, 0, err
 	}
-	zombieAllowTime, err = loadDurationEnv("LXD_MULTI_ZOMBIE_ALLOW_TIME", 5*time.Minute)
+	zombieAllowTime, err := loadDurationEnv("LXD_MULTI_ZOMBIE_ALLOW_TIME", 5*time.Minute)
 	if err != nil {
-		return
+		return 0, 0, 0, err
 	}
 
-	return
+	return checkInterval, waitIdleTime, zombieAllowTime, nil
 }
 
 func loadDurationEnv(name string, def time.Duration) (time.Duration, error) {
