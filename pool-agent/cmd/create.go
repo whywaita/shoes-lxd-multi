@@ -15,7 +15,6 @@ func (a *Agent) createInstance(name string, rt ResourceTypesMap) error {
 	op, err := a.Client.CreateInstance(api.InstancesPost{
 		Name: name,
 		InstancePut: api.InstancePut{
-			Ephemeral: true,
 			Config: map[string]string{
 				"limits.cpu":          strconv.Itoa(rt.CPUCore),
 				"limits.memory":       rt.Memory,
