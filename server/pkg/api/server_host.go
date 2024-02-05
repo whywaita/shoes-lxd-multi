@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -27,12 +28,18 @@ func (s *ShoesLXDMultiServer) isExistInstance(targetLXDHosts []lxdclient.LXDHost
 		eg.Go(func() error {
 			l := logger.With("host", host.HostConfig.LxdHost)
 			err := isExistInstanceWithTimeout(host, instanceName)
-			if err != nil && !errors.Is(err, ErrTimeoutGetInstance) {
-				l.Warn("failed to get instance (not ErrTimeoutGetInstance)", "err", err.Error())
-				return nil
-			} else if errors.Is(err, ErrTimeoutGetInstance) {
-				l.Warn("failed to get instance (reach timeout), So ignore host", "err", err.Error())
-				return nil
+			if err != nil {
+				switch {
+				case errors.Is(err, ErrInstanceIsNotFound):
+					// not found instance, It's a many case in this. so ignore this host
+					return nil
+				case errors.Is(err, ErrTimeoutGetInstance):
+					l.Warn("failed to get instance (reach timeout), So ignore host", "err", err.Error())
+					return nil
+				default:
+					l.Warn("failed to get instance", "err", err.Error())
+					return nil
+				}
 			}
 
 			foundHost = &host
@@ -58,7 +65,11 @@ var (
 func isExistInstanceWithTimeout(targetLXDHost lxdclient.LXDHost, instanceName string) error {
 	errCh := make(chan error, 1)
 	go func() {
-		_, _, err := targetLXDHost.Client.GetInstance(instanceName)
+		instance, _, err := targetLXDHost.Client.GetInstance(instanceName)
+		if instance.StatusCode == http.StatusNotFound {
+			errCh <- ErrInstanceIsNotFound
+			return
+		}
 		errCh <- err
 	}()
 
