@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"strconv"
 
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/config"
@@ -27,7 +28,7 @@ func GetCPUOverCommitPercent(in Resource) uint64 {
 }
 
 // GetResource get Resource
-func GetResource(hostConfig config.HostConfig) (*Resource, error) {
+func GetResource(hostConfig config.HostConfig, logger *slog.Logger) (*Resource, error) {
 	status, err := GetStatusCache(hostConfig.LxdHost)
 	if err == nil {
 		// found from cache
@@ -37,7 +38,7 @@ func GetResource(hostConfig config.HostConfig) (*Resource, error) {
 		return nil, fmt.Errorf("failed to get status from cache: %w", err)
 	}
 
-	log.Printf("failed to get status from cache, so scrape from lxd")
+	logger.Warn("failed to get status from cache, so scrape from lxd")
 
 	client, err := ConnectLXDWithTimeout(hostConfig.LxdHost, hostConfig.LxdClientCert, hostConfig.LxdClientKey)
 	if err != nil {

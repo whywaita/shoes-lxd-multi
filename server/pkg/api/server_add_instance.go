@@ -208,7 +208,7 @@ func getResources(targetLXDHosts []lxdclient.LXDHost) ([]targetHost, error) {
 		t := t
 		eg.Go(func() error {
 			l := slog.With("host", t.HostConfig.LxdHost)
-			resources, err := lxdclient.GetResource(t.HostConfig)
+			resources, err := lxdclient.GetResource(t.HostConfig, l)
 			if err != nil {
 				l.Warn("failed to get resource", "err", err.Error())
 				return nil
