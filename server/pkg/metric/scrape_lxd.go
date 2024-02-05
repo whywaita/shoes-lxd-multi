@@ -3,7 +3,7 @@ package metric
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"sync"
 
@@ -82,7 +82,10 @@ func scrapeLXDHosts(ctx context.Context, hostConfigs []config.HostConfig, ch cha
 			defer wg.Done()
 
 			if err := scrapeLXDHost(host, ch); err != nil {
-				log.Printf("failed to scrape LXD host: %s, %s\n", host.HostConfig.LxdHost, err)
+				slog.With("host", host.HostConfig.LxdHost).Warn(
+					"failed to scrape LXD host",
+					"err", err.Error(),
+				)
 			}
 		}(host)
 	}

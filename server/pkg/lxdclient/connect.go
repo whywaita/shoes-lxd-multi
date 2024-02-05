@@ -3,7 +3,7 @@ package lxdclient
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -28,13 +28,14 @@ func ConnectLXDs(hostConfigs []config.HostConfig) ([]LXDHost, error) {
 
 	for _, hc := range hostConfigs {
 		hc := hc
+		l := slog.With("host", hc.LxdHost)
 		eg.Go(func() error {
 			conn, err := ConnectLXDWithTimeout(hc.LxdHost, hc.LxdClientCert, hc.LxdClientKey)
 			if err != nil && !errors.Is(err, ErrTimeoutConnectLXD) {
-				log.Printf("failed to connect LXD with timeout (host: %s): %+v\n", err, hc.LxdHost)
+				l.Warn("failed to connect LXD with timeout (not ErrTimeoutConnectLXD)", "err", err.Error())
 				return nil
 			} else if errors.Is(err, ErrTimeoutConnectLXD) {
-				log.Printf("failed to connect LXD, So ignore host (host: %s)\n", hc.LxdHost)
+				l.Warn("failed to connect LXD, So ignore host")
 				return nil
 			}
 

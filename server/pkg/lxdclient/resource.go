@@ -37,6 +37,8 @@ func GetResource(hostConfig config.HostConfig) (*Resource, error) {
 		return nil, fmt.Errorf("failed to get status from cache: %w", err)
 	}
 
+	log.Printf("failed to get status from cache, so scrape from lxd")
+
 	client, err := ConnectLXDWithTimeout(hostConfig.LxdHost, hostConfig.LxdClientCert, hostConfig.LxdClientKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect lxd: %w", err)

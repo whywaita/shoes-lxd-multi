@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/lxc/lxd/shared/api"
@@ -15,17 +15,19 @@ import (
 
 // DeleteInstance delete instance to LXD server
 func (s *ShoesLXDMultiServer) DeleteInstance(ctx context.Context, req *pb.DeleteInstanceRequest) (*pb.DeleteInstanceResponse, error) {
-	log.Printf("DeleteInstance req: %+v\n", req)
+	slog.Info("DeleteInstance", "req", req)
+	l := slog.With("method", "DeleteInstance")
 	if _, err := runner.ToUUID(req.CloudId); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to parse request id: %+v", err)
 	}
 	instanceName := req.CloudId
-	targetLXDHosts, err := s.validateTargetHosts(req.TargetHosts)
+	l = l.With("instanceName", instanceName)
+	targetLXDHosts, err := s.validateTargetHosts(req.TargetHosts, l)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to validate target hosts: %+v", err)
 	}
 
-	host, err := s.isExistInstance(targetLXDHosts, instanceName)
+	host, err := s.isExistInstance(targetLXDHosts, instanceName, l)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInstanceIsNotFound):
@@ -35,6 +37,7 @@ func (s *ShoesLXDMultiServer) DeleteInstance(ctx context.Context, req *pb.Delete
 		}
 	}
 
+	l.Info("will stop instance")
 	client := host.Client
 	reqState := api.InstanceStatePut{
 		Action:  "stop",
@@ -48,6 +51,7 @@ func (s *ShoesLXDMultiServer) DeleteInstance(ctx context.Context, req *pb.Delete
 		return nil, status.Errorf(codes.Internal, "failed to wait stopping instance: %+v", err)
 	}
 
+	l.Info("will delete instance")
 	op, err = client.DeleteInstance(instanceName)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to delete instance: %+v", err)

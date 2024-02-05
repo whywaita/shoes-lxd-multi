@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"sync"
 
@@ -52,13 +53,14 @@ func (s *ShoesLXDMultiServer) Run(listenPort int) error {
 	return nil
 }
 
-func (s *ShoesLXDMultiServer) validateTargetHosts(targetHosts []string) ([]lxdclient.LXDHost, error) {
+func (s *ShoesLXDMultiServer) validateTargetHosts(targetHosts []string, logger *slog.Logger) ([]lxdclient.LXDHost, error) {
 	var hostConfigs []config.HostConfig
 
 	for _, target := range targetHosts {
+		l := logger.With("target", target)
 		host, err := s.hostConfigs.Load(target)
 		if err != nil {
-			log.Printf("ignore host in target (target: %s): %+v\n", target, err)
+			l.Warn("ignore host in target", "err", err.Error())
 			continue
 		}
 

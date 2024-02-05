@@ -3,7 +3,7 @@ package metric
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -48,7 +48,7 @@ func (c *Collector) Describe(ch chan<- *prometheus.Desc) {
 	c.metrics.ScrapeErrors.Describe(ch)
 }
 
-// Collect collect metrics
+// Collect metrics
 func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	c.scrape(c.ctx, ch)
 
@@ -69,7 +69,7 @@ func (c *Collector) scrape(ctx context.Context, ch chan<- prometheus.Metric) {
 			label := fmt.Sprintf("collect.%s", scraper.Name())
 			scrapeStartTime := time.Now()
 			if err := scraper.Scrape(ctx, c.hostConfigs, ch); err != nil {
-				log.Printf("failed to scrape metrics (name: %s): %+v\n", scraper.Name(), err)
+				slog.Warn("failed to scrape metrics", "name", scraper.Name(), "err", err.Error())
 				c.metrics.ScrapeErrors.WithLabelValues(label).Inc()
 				c.metrics.Error.Set(1)
 			}

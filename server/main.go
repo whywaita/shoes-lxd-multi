@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math/rand"
+	"log/slog"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -19,7 +20,7 @@ import (
 )
 
 func main() {
-	rand.Seed(time.Now().UnixNano())
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 
 	if err := run(); err != nil {
 		log.Fatal(err)
@@ -83,9 +84,7 @@ func serveMetrics(ctx context.Context, hostConfigs *config.HostConfigMap) {
 
 func setLXDResourceCacheWithTicker(hcs []config.HostConfig, ticker *time.Ticker) {
 	for {
-		_ = <-ticker.C
-
-		log.Print("LXD cache is updating")
+		<-ticker.C
 		if err := setLXDResourceCache(hcs); err != nil {
 			log.Fatal(err)
 		}
