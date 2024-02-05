@@ -2,7 +2,6 @@ package api
 
 import (
 	"fmt"
-	"log"
 	"log/slog"
 	"net"
 	"sync"
@@ -42,7 +41,7 @@ func (s *ShoesLXDMultiServer) Run(listenPort int) error {
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}
-	log.Printf("start listen :%d\n", listenPort)
+	slog.Info("start listen", "port", listenPort)
 
 	grpcServer := grpc.NewServer()
 	pb.RegisterShoesLXDMultiServer(grpcServer, s)

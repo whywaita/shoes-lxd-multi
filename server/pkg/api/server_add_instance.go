@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"log/slog"
 	"math/rand"
 	"net/url"
@@ -72,6 +71,7 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	} else {
 		client = host.Client
 	}
+	l = l.With("host", host.HostConfig.LxdHost)
 
 	reqState := api.InstanceStatePut{
 		Action:  "start",
@@ -89,7 +89,7 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to retrieve instance information: %+v", err)
 	}
-	log.Printf("Success AddInstance host: %s, runnerName: %s\n", host.HostConfig.LxdHost, i.Name)
+	l.Info("Success AddInstance", "host", host.HostConfig.LxdHost, "runnerName", i.Name)
 
 	return &pb.AddInstanceResponse{
 		CloudId:      i.Name,

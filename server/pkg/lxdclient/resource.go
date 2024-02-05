@@ -3,7 +3,6 @@ package lxdclient
 import (
 	"errors"
 	"fmt"
-	"log"
 	"log/slog"
 	"strconv"
 
@@ -113,7 +112,7 @@ func ScrapeLXDHostAllocatedResources(instances []api.Instance) (uint64, uint64, 
 			}
 			allocatedCPU += uint64(cpu)
 		} else {
-			log.Printf("%s hasn't limits.cpu\n", instance.Name)
+			slog.Warn("instance hasn't limits.cpu", "instance", instance.Name)
 		}
 
 		instanceMemory := instance.Config["limits.memory"]
@@ -124,7 +123,7 @@ func ScrapeLXDHostAllocatedResources(instances []api.Instance) (uint64, uint64, 
 			}
 			allocatedMemory += uint64(memory)
 		} else {
-			log.Printf("%s hasn't limits.memory\n", instance.Name)
+			slog.Warn("instance hasn't limits.memory", "instance", instance.Name)
 		}
 	}
 
