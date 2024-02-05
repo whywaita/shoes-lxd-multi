@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
+	"strings"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -65,17 +65,17 @@ var (
 func isExistInstanceWithTimeout(targetLXDHost lxdclient.LXDHost, instanceName string) error {
 	errCh := make(chan error, 1)
 	go func() {
-		instance, _, err := targetLXDHost.Client.GetInstance(instanceName)
-		if instance.StatusCode == http.StatusNotFound {
-			errCh <- ErrInstanceIsNotFound
-			return
-		}
+		_, _, err := targetLXDHost.Client.GetInstance(instanceName)
 		errCh <- err
 	}()
 
 	select {
 	case err := <-errCh:
 		if err != nil {
+			if strings.Contains(err.Error(), "Instance not found") {
+				return ErrInstanceIsNotFound
+			}
+
 			return fmt.Errorf("failed to found instance: %w", err)
 		}
 
