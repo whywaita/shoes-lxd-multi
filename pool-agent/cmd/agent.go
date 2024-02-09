@@ -163,6 +163,22 @@ func (a *Agent) checkInstances(ctx context.Context) error {
 			}
 			log.Printf("Deleted zombie instance %q", i.Name)
 		}
+		if isOld, err := a.isOldImageInstance(i); err != nil {
+			log.Printf("failed to check old image instance %q: %+v", i.Name, err)
+		} else if isOld {
+			if _, ok := a.deletingInstances[i.Name]; ok {
+				continue
+			}
+			log.Printf("Deleting instance %q...", i.Name)
+			op, err := a.Client.DeleteInstance(i.Name)
+			if err != nil {
+				return fmt.Errorf("delete instance %q: %w", i.Name, err)
+			}
+			if err := op.Wait(); err != nil {
+				return fmt.Errorf("delete instance %q operation: %w", i.Name, err)
+			}
+			log.Printf("Deleted old image instance %q", i.Name)
+		}
 	}
 
 	return nil
@@ -212,4 +228,22 @@ func (a *Agent) deleteZombieInstance(i api.Instance) error {
 	}
 
 	return nil
+}
+
+func (a *Agent) isOldImageInstance(i api.Instance) (bool, error) {
+	images, err := a.Client.GetImages()
+	if err != nil {
+		return false, fmt.Errorf("Failed to get images: %w", err)
+	}
+
+	for _, image := range images {
+		if image.Aliases[0].Name == a.ImageAlias {
+			if i.Config["volatile.base_image"] != image.Fingerprint {
+				if i.StatusCode == api.Frozen {
+					return true, nil
+				}
+			}
+		}
+	}
+	return false, nil
 }
