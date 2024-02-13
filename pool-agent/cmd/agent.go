@@ -238,7 +238,11 @@ func (a *Agent) isOldImageInstance(i api.Instance) (bool, error) {
 
 	for _, image := range images {
 		if image.Aliases[0].Name == a.ImageAlias {
-			if i.Config["volatile.base_image"] != image.Fingerprint {
+			baseImage, ok := i.Config["volatile.base_image"]
+			if !ok {
+				return false, fmt.Errorf("Failed to get volatile.base_image")
+			}
+			if baseImage != image.Fingerprint {
 				if i.StatusCode == api.Frozen {
 					return true, nil
 				}
