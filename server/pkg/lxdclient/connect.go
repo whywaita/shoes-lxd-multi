@@ -19,6 +19,7 @@ type LXDHost struct {
 	HostConfig config.HostConfig
 }
 
+// ErrLXDHost is error for LXD host
 type ErrLXDHost struct {
 	HostConfig config.HostConfig
 	Err        error
