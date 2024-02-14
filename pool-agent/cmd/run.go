@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"os"
 	"os/signal"
 	"syscall"
 
@@ -20,13 +21,15 @@ var agentRunCommand = &cobra.Command{
 			return err
 		}
 
-		agent, err := newAgent(conf)
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		sigHupCh := make(chan os.Signal, 1)
+		signal.Notify(sigHupCh, syscall.SIGHUP)
+
+		agent, err := newAgent(ctx, conf)
 		if err != nil {
 			return err
 		}
 
-		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-		defer stop()
-
-		return agent.Run(ctx)
+		return agent.Run(ctx, sigHupCh)
 	}}

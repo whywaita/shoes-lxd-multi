@@ -5,8 +5,10 @@ import (
 	"crypto/rand"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
+	"github.com/allegro/bigcache/v3"
 	lxd "github.com/lxc/lxd/client"
 	"github.com/lxc/lxd/shared/api"
 	"github.com/pkg/errors"
@@ -21,6 +23,7 @@ type Agent struct {
 	ResourceTypesMap   []ResourceTypesMap
 	ResouceTypesCounts ResourceTypesCounts
 	Client             lxd.InstanceServer
+	ImageClient        lxd.ImageServer
 
 	CheckInterval   time.Duration
 	WaitIdleTime    time.Duration
@@ -28,11 +31,12 @@ type Agent struct {
 
 	creatingInstances map[string]instances
 	deletingInstances instances
+	cache             *bigcache.BigCache
 }
 
 type instances map[string]struct{}
 
-func newAgent(conf Config) (*Agent, error) {
+func newAgent(ctx context.Context, conf Config) (*Agent, error) {
 	source, err := slm.ParseAlias(conf.ImageAlias)
 	if err != nil {
 		return nil, err
@@ -41,9 +45,20 @@ func newAgent(conf Config) (*Agent, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to connect lxd")
 	}
+	ic, err := lxd.ConnectSimpleStreams(source.Server, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to connect lxd image server")
+	}
 	checkInterval, waitIdleTime, zombieAllowTime, err := LoadParams()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to load params")
+	}
+	eviction := 30 * time.Minute
+	config := bigcache.DefaultConfig(eviction)
+	config.HardMaxCacheSize = 128 // MB
+	cache, err := bigcache.New(ctx, config)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create bigcache")
 	}
 	creatingInstances := make(map[string]instances)
 	for _, rt := range conf.ResourceTypesMap {
@@ -56,6 +71,7 @@ func newAgent(conf Config) (*Agent, error) {
 		ResourceTypesMap:   conf.ResourceTypesMap,
 		ResouceTypesCounts: conf.ResourceTypesCounts,
 		Client:             c,
+		ImageClient:        ic,
 
 		CheckInterval:   checkInterval,
 		WaitIdleTime:    waitIdleTime,
@@ -63,12 +79,36 @@ func newAgent(conf Config) (*Agent, error) {
 
 		creatingInstances: creatingInstances,
 		deletingInstances: make(instances),
+		cache:             cache,
 	}
 	return agent, nil
 }
 
+func (a *Agent) reloadConfig() {
+	conf, err := LoadConfig()
+	if err != nil {
+		log.Printf("failed to load config: %+v", err)
+		return
+	}
+	source, err := slm.ParseAlias(conf.ImageAlias)
+	if err != nil {
+		log.Printf("failed to parse image alias: %+v", err)
+		return
+	}
+	ic, err := lxd.ConnectSimpleStreams(source.Server, nil)
+	if err != nil {
+		log.Printf("failed to connect lxd image server: %+v", err)
+		return
+	}
+	a.ImageClient = ic
+	a.InstanceSource = *source
+	a.ImageAlias = conf.ImageAlias
+	a.ResourceTypesMap = conf.ResourceTypesMap
+	a.ResouceTypesCounts = conf.ResourceTypesCounts
+}
+
 // Run runs the agent.
-func (a *Agent) Run(ctx context.Context) error {
+func (a *Agent) Run(ctx context.Context, sigHupCh chan os.Signal) error {
 	ticker := time.NewTicker(a.CheckInterval)
 	defer ticker.Stop()
 
@@ -76,6 +116,9 @@ func (a *Agent) Run(ctx context.Context) error {
 
 	for {
 		select {
+		case <-sigHupCh:
+			log.Println("Received SIGHUP. Reloading config...")
+			a.reloadConfig()
 		case <-ticker.C:
 			if err := a.checkInstances(ctx); err != nil {
 				log.Printf("failed to check instances: %+v", err)
@@ -231,22 +274,25 @@ func (a *Agent) deleteZombieInstance(i api.Instance) error {
 }
 
 func (a *Agent) isOldImageInstance(i api.Instance) (bool, error) {
-	images, err := a.Client.GetImages()
+	entry, err := a.cache.Get(cacheKeyImageServer)
 	if err != nil {
-		return false, fmt.Errorf("Failed to get images: %w", err)
+		image, _, err := a.ImageClient.GetImageAlias(a.InstanceSource.Alias)
+		if err != nil {
+			return false, fmt.Errorf("Failed to get image %q: %w", a.ImageAlias, err)
+		}
+		if err := a.cache.Set(cacheKeyImageServer, []byte(image.Target)); err != nil {
+			return false, fmt.Errorf("Failed to set cache: %w", err)
+		}
+		return a.isOldImageInstance(i)
 	}
 
-	for _, image := range images {
-		if image.Aliases[0].Name == a.ImageAlias {
-			baseImage, ok := i.Config["volatile.base_image"]
-			if !ok {
-				return false, fmt.Errorf("Failed to get volatile.base_image")
-			}
-			if baseImage != image.Fingerprint {
-				if i.StatusCode == api.Frozen {
-					return true, nil
-				}
-			}
+	baseImage, ok := i.Config["volatile.base_image"]
+	if !ok {
+		return false, fmt.Errorf("Failed to get volatile.base_image")
+	}
+	if baseImage != string(entry) {
+		if i.StatusCode == api.Frozen {
+			return true, nil
 		}
 	}
 	return false, nil

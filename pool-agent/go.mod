@@ -5,12 +5,12 @@ go 1.22.0
 toolchain go1.22.2
 
 require (
+	github.com/allegro/bigcache/v3 v3.1.0
 	github.com/lxc/lxd v0.0.0-20211202222358-a293da71aeb0
 	github.com/pelletier/go-toml/v2 v2.2.1
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.2.1
 	github.com/whywaita/shoes-lxd-multi/server v0.0.0-20240416053912-6df6153e11ef
-	golang.org/x/sync v0.6.0
 )
 
 require (
@@ -51,6 +51,7 @@ require (
 	golang.org/x/crypto v0.0.0-20211117183948-ae814b36b871 // indirect
 	golang.org/x/net v0.8.0 // indirect
 	golang.org/x/oauth2 v0.4.0 // indirect
+	golang.org/x/sync v0.6.0 // indirect
 	golang.org/x/sys v0.6.0 // indirect
 	golang.org/x/text v0.8.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
