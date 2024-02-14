@@ -41,11 +41,11 @@ func newAgent(ctx context.Context, conf Config) (*Agent, error) {
 	if err != nil {
 		return nil, err
 	}
-	c, err := lxd.ConnectLXDUnix("", &lxd.ConnectionArgs{})
+	c, err := lxd.ConnectLXDUnixWithContext(ctx, "", &lxd.ConnectionArgs{})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to connect lxd")
 	}
-	ic, err := lxd.ConnectSimpleStreams(source.Server, nil)
+	ic, err := lxd.ConnectLXDWithContext(ctx, source.Server, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to connect lxd image server")
 	}
@@ -53,6 +53,7 @@ func newAgent(ctx context.Context, conf Config) (*Agent, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load params")
 	}
+
 	eviction := 30 * time.Minute
 	config := bigcache.DefaultConfig(eviction)
 	config.HardMaxCacheSize = 128 // MB
@@ -84,7 +85,7 @@ func newAgent(ctx context.Context, conf Config) (*Agent, error) {
 	return agent, nil
 }
 
-func (a *Agent) reloadConfig() {
+func (a *Agent) reloadConfig(ctx context.Context) {
 	conf, err := LoadConfig()
 	if err != nil {
 		log.Printf("failed to load config: %+v", err)
@@ -95,14 +96,17 @@ func (a *Agent) reloadConfig() {
 		log.Printf("failed to parse image alias: %+v", err)
 		return
 	}
-	ic, err := lxd.ConnectSimpleStreams(source.Server, nil)
-	if err != nil {
-		log.Printf("failed to connect lxd image server: %+v", err)
-		return
+	if conf.ImageAlias != a.ImageAlias {
+		a.ImageClient.Disconnect()
+		ic, err := lxd.ConnectLXDWithContext(ctx, source.Server, nil)
+		if err != nil {
+			log.Printf("failed to connect lxd image server: %+v", err)
+			return
+		}
+		a.ImageClient = ic
+		a.InstanceSource = *source
+		a.ImageAlias = conf.ImageAlias
 	}
-	a.ImageClient = ic
-	a.InstanceSource = *source
-	a.ImageAlias = conf.ImageAlias
 	a.ResourceTypesMap = conf.ResourceTypesMap
 	a.ResouceTypesCounts = conf.ResourceTypesCounts
 }
@@ -118,7 +122,7 @@ func (a *Agent) Run(ctx context.Context, sigHupCh chan os.Signal) error {
 		select {
 		case <-sigHupCh:
 			log.Println("Received SIGHUP. Reloading config...")
-			a.reloadConfig()
+			a.reloadConfig(ctx)
 		case <-ticker.C:
 			if err := a.checkInstances(ctx); err != nil {
 				log.Printf("failed to check instances: %+v", err)
