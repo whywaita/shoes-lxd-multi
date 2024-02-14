@@ -5,7 +5,6 @@ go 1.22.0
 toolchain go1.22.2
 
 require (
-	github.com/allegro/bigcache/v3 v3.1.0
 	github.com/lxc/lxd v0.0.0-20220308034307-91f3610e71c1
 	github.com/pelletier/go-toml/v2 v2.2.1
 	github.com/pkg/errors v0.9.1
