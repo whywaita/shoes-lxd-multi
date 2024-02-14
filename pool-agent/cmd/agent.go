@@ -169,12 +169,15 @@ func (a *Agent) checkInstances(ctx context.Context) error {
 		return fmt.Errorf("get instances: %w", err)
 	}
 
+	toDelete := []string{}
+
 	for _, rt := range a.ResourceTypesMap {
 		current := a.countPooledInstances(s, rt.Name)
 		creating := len(a.creatingInstances[rt.Name])
 		rtCount, ok := a.ResouceTypesCounts[rt.Name]
 		if !ok {
-			return fmt.Errorf("get resource counts: %w", err)
+			toDelete = append(toDelete, rt.Name)
+			continue
 		}
 		createCount := rtCount - current - creating
 		if createCount < 1 {
@@ -197,15 +200,21 @@ func (a *Agent) checkInstances(ctx context.Context) error {
 	}
 
 	for _, i := range s {
-		if a.isZombieInstance(i) {
-			if _, ok := a.deletingInstances[i.Name]; ok {
-				continue
+		if _, ok := a.ResouceTypesCounts[i.Config[configKeyResourceType]]; !ok {
+			toDelete = append(toDelete, i.Config[configKeyResourceType])
+		}
+		for _, rt := range toDelete {
+			if i.Config[configKeyResourceType] == rt {
+				log.Printf("Deleting disabled resource type instance %q...", i.Name)
+				if err := a.deleteInstance(i); err != nil {
+					log.Printf("failed to delete instance %q: %+v", i.Name, err)
+				}
+				log.Printf("Deleted disabled resource type instance %q", i.Name)
 			}
+		}
+		if a.isZombieInstance(i) {
 			log.Printf("Deleting zombie instance %q...", i.Name)
-			a.deletingInstances[i.Name] = struct{}{}
-			defer delete(a.deletingInstances, i.Name)
-
-			if err := a.deleteZombieInstance(i); err != nil {
+			if err := a.deleteInstance(i); err != nil {
 				log.Printf("failed to delete zombie instance %q: %+v", i.Name, err)
 			}
 			log.Printf("Deleted zombie instance %q", i.Name)
@@ -213,16 +222,9 @@ func (a *Agent) checkInstances(ctx context.Context) error {
 		if isOld, err := a.isOldImageInstance(i); err != nil {
 			log.Printf("failed to check old image instance %q: %+v", i.Name, err)
 		} else if isOld {
-			if _, ok := a.deletingInstances[i.Name]; ok {
-				continue
-			}
-			log.Printf("Deleting instance %q...", i.Name)
-			op, err := a.Client.DeleteInstance(i.Name)
-			if err != nil {
-				return fmt.Errorf("delete instance %q: %w", i.Name, err)
-			}
-			if err := op.Wait(); err != nil {
-				return fmt.Errorf("delete instance %q operation: %w", i.Name, err)
+			log.Printf("Deleting old image instance %q...", i.Name)
+			if err := a.deleteInstance(i); err != nil {
+				log.Printf("failed to delete old image instance %q: %+v", i.Name, err)
 			}
 			log.Printf("Deleted old image instance %q", i.Name)
 		}
@@ -257,6 +259,7 @@ func (a *Agent) deleteZombieInstance(i api.Instance) error {
 		op, err := a.Client.UpdateInstanceState(i.Name, api.InstanceStatePut{
 			Action:  "stop",
 			Timeout: -1,
+			Force:   true,
 		}, "")
 		if err != nil {
 			return fmt.Errorf("stop: %w", err)
@@ -284,6 +287,7 @@ func (a *Agent) isOldImageInstance(i api.Instance) (bool, error) {
 		if err != nil {
 			return false, fmt.Errorf("Failed to get image %q: %w", a.ImageAlias, err)
 		}
+		log.Printf("Got image %q: %q", a.ImageAlias, image.Target)
 		if err := a.cache.Set(cacheKeyImageServer, []byte(image.Target)); err != nil {
 			return false, fmt.Errorf("Failed to set cache: %w", err)
 		}
@@ -300,4 +304,27 @@ func (a *Agent) isOldImageInstance(i api.Instance) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+func (a *Agent) deleteInstance(i api.Instance) error {
+	if _, ok := a.deletingInstances[i.Name]; ok {
+		return nil
+	}
+	a.deletingInstances[i.Name] = struct{}{}
+	defer delete(a.deletingInstances, i.Name)
+	stopOp, err := a.Client.UpdateInstanceState(i.Name, api.InstanceStatePut{Action: "stop", Timeout: -1, Force: true}, "")
+	if err != nil {
+		return fmt.Errorf("failed to stop instance %q: %+v", i.Name, err)
+	}
+	if err := stopOp.Wait(); err != nil {
+		return fmt.Errorf("failed to stop instance %q: %+v", i.Name, err)
+	}
+	deleteOp, err := a.Client.DeleteInstance(i.Name)
+	if err != nil {
+		return fmt.Errorf("delete instance %q: %w", i.Name, err)
+	}
+	if err := deleteOp.Wait(); err != nil {
+		return fmt.Errorf("delete instance %q operation: %w", i.Name, err)
+	}
+	return nil
 }
