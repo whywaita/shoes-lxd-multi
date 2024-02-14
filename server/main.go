@@ -92,7 +92,7 @@ func setLXDResourceCacheWithTicker(hcs []config.HostConfig, ticker *time.Ticker)
 }
 
 func setLXDResourceCache(hcs []config.HostConfig) error {
-	hosts, err := lxdclient.ConnectLXDs(hcs)
+	hosts, _, err := lxdclient.ConnectLXDs(hcs)
 	if err != nil {
 		return fmt.Errorf("failed to connect LXD hosts: %s", err)
 	}

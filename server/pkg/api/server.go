@@ -70,7 +70,7 @@ func (s *ShoesLXDMultiServer) validateTargetHosts(targetHosts []string, logger *
 		return nil, fmt.Errorf("valid target host is not found")
 	}
 
-	targetLXDHosts, err := lxdclient.ConnectLXDs(hostConfigs)
+	targetLXDHosts, _, err := lxdclient.ConnectLXDs(hostConfigs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect LXD: %w", err)
 	}
