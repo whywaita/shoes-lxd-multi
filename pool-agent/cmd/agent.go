@@ -8,7 +8,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/allegro/bigcache/v3"
 	lxd "github.com/lxc/lxd/client"
 	"github.com/lxc/lxd/shared/api"
 	"github.com/pkg/errors"
@@ -31,7 +30,6 @@ type Agent struct {
 
 	creatingInstances map[string]instances
 	deletingInstances instances
-	cache             *bigcache.BigCache
 }
 
 type instances map[string]struct{}
@@ -54,13 +52,6 @@ func newAgent(ctx context.Context, conf Config) (*Agent, error) {
 		return nil, errors.Wrap(err, "failed to load params")
 	}
 
-	eviction := 30 * time.Minute
-	config := bigcache.DefaultConfig(eviction)
-	config.HardMaxCacheSize = 128 // MB
-	cache, err := bigcache.New(ctx, config)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create bigcache")
-	}
 	creatingInstances := make(map[string]instances)
 	for _, rt := range conf.ResourceTypesMap {
 		creatingInstances[rt.Name] = make(instances)
@@ -80,7 +71,6 @@ func newAgent(ctx context.Context, conf Config) (*Agent, error) {
 
 		creatingInstances: creatingInstances,
 		deletingInstances: make(instances),
-		cache:             cache,
 	}
 	return agent, nil
 }
@@ -281,24 +271,16 @@ func (a *Agent) deleteZombieInstance(i api.Instance) error {
 }
 
 func (a *Agent) isOldImageInstance(i api.Instance) (bool, error) {
-	entry, err := a.cache.Get(cacheKeyImageServer)
+	image, _, err := a.ImageClient.GetImageAlias(a.InstanceSource.Alias)
 	if err != nil {
-		image, _, err := a.ImageClient.GetImageAlias(a.InstanceSource.Alias)
-		if err != nil {
-			return false, fmt.Errorf("Failed to get image %q: %w", a.ImageAlias, err)
-		}
-		log.Printf("Got image %q: %q", a.ImageAlias, image.Target)
-		if err := a.cache.Set(cacheKeyImageServer, []byte(image.Target)); err != nil {
-			return false, fmt.Errorf("Failed to set cache: %w", err)
-		}
-		return a.isOldImageInstance(i)
+		return false, fmt.Errorf("Failed to get image %q: %w", a.ImageAlias, err)
 	}
 
 	baseImage, ok := i.Config["volatile.base_image"]
 	if !ok {
 		return false, fmt.Errorf("Failed to get volatile.base_image")
 	}
-	if baseImage != string(entry) {
+	if baseImage != image.Target {
 		if i.StatusCode == api.Frozen {
 			return true, nil
 		}
