@@ -22,7 +22,6 @@ type Agent struct {
 	ResourceTypesMap   []ResourceTypesMap
 	ResouceTypesCounts ResourceTypesCounts
 	Client             lxd.InstanceServer
-	ImageClient        lxd.ImageServer
 
 	CheckInterval   time.Duration
 	WaitIdleTime    time.Duration
@@ -30,6 +29,10 @@ type Agent struct {
 
 	creatingInstances map[string]instances
 	deletingInstances instances
+	currentImage      struct {
+		Hash      string
+		CreatedAt time.Time
+	}
 }
 
 type instances map[string]struct{}
@@ -43,15 +46,10 @@ func newAgent(ctx context.Context, conf Config) (*Agent, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to connect lxd")
 	}
-	ic, err := lxd.ConnectLXDWithContext(ctx, source.Server, nil)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to connect lxd image server")
-	}
 	checkInterval, waitIdleTime, zombieAllowTime, err := LoadParams()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load params")
 	}
-
 	creatingInstances := make(map[string]instances)
 	for _, rt := range conf.ResourceTypesMap {
 		creatingInstances[rt.Name] = make(instances)
@@ -63,11 +61,14 @@ func newAgent(ctx context.Context, conf Config) (*Agent, error) {
 		ResourceTypesMap:   conf.ResourceTypesMap,
 		ResouceTypesCounts: conf.ResourceTypesCounts,
 		Client:             c,
-		ImageClient:        ic,
 
 		CheckInterval:   checkInterval,
 		WaitIdleTime:    waitIdleTime,
 		ZombieAllowTime: zombieAllowTime,
+		currentImage: struct {
+			Hash      string
+			CreatedAt time.Time
+		}{Hash: "", CreatedAt: time.Time{}},
 
 		creatingInstances: creatingInstances,
 		deletingInstances: make(instances),
@@ -81,19 +82,12 @@ func (a *Agent) reloadConfig(ctx context.Context) {
 		log.Printf("failed to load config: %+v", err)
 		return
 	}
-	source, err := slm.ParseAlias(conf.ImageAlias)
-	if err != nil {
-		log.Printf("failed to parse image alias: %+v", err)
-		return
-	}
 	if conf.ImageAlias != a.ImageAlias {
-		a.ImageClient.Disconnect()
-		ic, err := lxd.ConnectLXDWithContext(ctx, source.Server, nil)
+		source, err := slm.ParseAlias(conf.ImageAlias)
 		if err != nil {
-			log.Printf("failed to connect lxd image server: %+v", err)
+			log.Printf("failed to parse image alias: %+v", err)
 			return
 		}
-		a.ImageClient = ic
 		a.InstanceSource = *source
 		a.ImageAlias = conf.ImageAlias
 	}
@@ -244,45 +238,21 @@ func (a *Agent) isZombieInstance(i api.Instance) bool {
 	return true
 }
 
-func (a *Agent) deleteZombieInstance(i api.Instance) error {
-	if i.StatusCode == api.Running {
-		op, err := a.Client.UpdateInstanceState(i.Name, api.InstanceStatePut{
-			Action:  "stop",
-			Timeout: -1,
-			Force:   true,
-		}, "")
-		if err != nil {
-			return fmt.Errorf("stop: %w", err)
-		}
-		if err := op.Wait(); err != nil {
-			return fmt.Errorf("stop operation: %w", err)
-		}
-	}
-
-	op, err := a.Client.DeleteInstance(i.Name)
-	if err != nil {
-		return fmt.Errorf("delete: %w", err)
-	}
-	if err := op.Wait(); err != nil {
-		return fmt.Errorf("delete operation: %w", err)
-	}
-
-	return nil
-}
-
 func (a *Agent) isOldImageInstance(i api.Instance) (bool, error) {
-	image, _, err := a.ImageClient.GetImageAlias(a.InstanceSource.Alias)
-	if err != nil {
-		return false, fmt.Errorf("Failed to get image %q: %w", a.ImageAlias, err)
-	}
-
 	baseImage, ok := i.Config["volatile.base_image"]
 	if !ok {
 		return false, fmt.Errorf("Failed to get volatile.base_image")
 	}
-	if baseImage != image.Target {
-		if i.StatusCode == api.Frozen {
-			return true, nil
+	if baseImage != a.currentImage.Hash {
+		if i.CreatedAt.Before(a.currentImage.CreatedAt) {
+			if i.StatusCode == api.Frozen {
+				return true, nil
+			}
+			return false, nil
+		} else {
+			a.currentImage.Hash = baseImage
+			a.currentImage.CreatedAt = i.CreatedAt
+			return false, nil
 		}
 	}
 	return false, nil
