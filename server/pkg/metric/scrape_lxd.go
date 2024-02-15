@@ -8,10 +8,13 @@ import (
 	"sync"
 
 	"github.com/docker/go-units"
+
+	"github.com/whywaita/shoes-lxd-multi/server/pkg/api"
+	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
+
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/config"
-	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
 )
 
 const lxdName = "lxd"
@@ -40,7 +43,7 @@ var (
 	lxdInstance = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, lxdName, "instance"),
 		"LXD instances",
-		[]string{"instance_name", "stadium_name", "status", "cpu", "memory"}, nil,
+		[]string{"instance_name", "stadium_name", "status", "flavor", "cpu", "memory"}, nil,
 	)
 	lxdConnectErrHost = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, lxdName, "host_connect_error"),
@@ -122,7 +125,7 @@ func scrapeLXDHost(ctx context.Context, host lxdclient.LXDHost, ch chan<- promet
 
 		ch <- prometheus.MustNewConstMetric(
 			lxdInstance, prometheus.GaugeValue, 1,
-			instance.Name, hostname, instance.Status, instance.Config["limits.cpu"], strconv.FormatInt(memory, 10),
+			instance.Name, hostname, instance.Status, instance.Config[api.ConfigKeyResourceType], instance.Config["limits.cpu"], strconv.FormatInt(memory, 10),
 		)
 	}
 
