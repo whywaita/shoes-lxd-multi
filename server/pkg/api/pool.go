@@ -14,13 +14,7 @@ import (
 	"github.com/lxc/lxd/shared/api"
 
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
-)
-
-const (
-	ConfigKeyResourceType = "user.myshoes_resource_type"
-	ConfigKeyImageAlias   = "user.myshoes_image_alias"
-	ConfigKeyRunnerName   = "user.myshoes_runner_name"
-	ConfigKeyAllocatedAt  = "user.myshoes_allocated_at"
+	"github.com/whywaita/shoes-lxd-multi/server/pkg/metric"
 )
 
 func getInstancesWithTimeout(h lxdclient.LXDHost, d time.Duration) (s []api.Instance, overCommitPercent uint64, err error) {
@@ -131,7 +125,7 @@ func findInstances(targets []lxdclient.LXDHost, match func(api.Instance) bool, l
 
 func findInstanceByJob(targets []lxdclient.LXDHost, runnerName string) (*lxdclient.LXDHost, string, bool) {
 	s := findInstances(targets, func(i api.Instance) bool {
-		return i.Config[ConfigKeyRunnerName] == runnerName
+		return i.Config[lxdclient.ConfigKeyRunnerName] == runnerName
 	}, 0)
 	if len(s) < 1 {
 		return nil, "", false
@@ -144,13 +138,13 @@ func allocatePooledInstance(targets []lxdclient.LXDHost, resourceType, imageAlia
 		if i.StatusCode != api.Frozen {
 			return false
 		}
-		if i.Config[ConfigKeyResourceType] != resourceType {
+		if i.Config[lxdclient.ConfigKeyResourceType] != resourceType {
 			return false
 		}
-		if i.Config[ConfigKeyImageAlias] != imageAlias {
+		if i.Config[lxdclient.ConfigKeyImageAlias] != imageAlias {
 			return false
 		}
-		if _, ok := i.Config[ConfigKeyRunnerName]; ok {
+		if _, ok := i.Config[lxdclient.ConfigKeyRunnerName]; ok {
 			return false
 		}
 		return true
@@ -159,6 +153,7 @@ func allocatePooledInstance(targets []lxdclient.LXDHost, resourceType, imageAlia
 	for _, i := range s {
 		if err := allocateInstance(*i.Host, i.InstanceName, runnerName); err != nil {
 			log.Printf("failed to allocate instance %q in host %q (trying another instance): %+v", i.InstanceName, i.Host.HostConfig.LxdHost, err)
+			metric.FailedAllocateCount.WithLabelValues(i.Host.HostConfig.LxdHost, resourceType, i.InstanceName).Inc()
 			continue
 		}
 		return i.Host, i.InstanceName, nil
@@ -173,14 +168,14 @@ func allocateInstance(host lxdclient.LXDHost, instanceName, runnerName string) e
 		return fmt.Errorf("get instance: %w", err)
 	}
 
-	if _, ok := i.Config[ConfigKeyRunnerName]; ok {
+	if _, ok := i.Config[lxdclient.ConfigKeyRunnerName]; ok {
 		return fmt.Errorf("already allocated instance %q in host %q", instanceName, host.HostConfig.LxdHost)
 	}
 
 	log.Printf("Allocating %q to %q", instanceName, runnerName)
 
-	i.InstancePut.Config[ConfigKeyRunnerName] = runnerName
-	i.InstancePut.Config[ConfigKeyAllocatedAt] = time.Now().UTC().Format(time.RFC3339Nano)
+	i.InstancePut.Config[lxdclient.ConfigKeyRunnerName] = runnerName
+	i.InstancePut.Config[lxdclient.ConfigKeyAllocatedAt] = time.Now().UTC().Format(time.RFC3339Nano)
 
 	op, err := host.Client.UpdateInstance(instanceName, i.InstancePut, etag)
 	if err != nil {
@@ -195,8 +190,8 @@ func allocateInstance(host lxdclient.LXDHost, instanceName, runnerName string) e
 	if err != nil {
 		return fmt.Errorf("get instance: %w", err)
 	}
-	if i.Config[ConfigKeyRunnerName] != runnerName {
-		return fmt.Errorf("updated instance config mismatch: got=%q expected=%q", i.Config[ConfigKeyRunnerName], runnerName)
+	if i.Config[lxdclient.ConfigKeyRunnerName] != runnerName {
+		return fmt.Errorf("updated instance config mismatch: got=%q expected=%q", i.Config[lxdclient.ConfigKeyRunnerName], runnerName)
 	}
 
 	return nil

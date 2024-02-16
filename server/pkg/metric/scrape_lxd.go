@@ -9,7 +9,6 @@ import (
 
 	"github.com/docker/go-units"
 
-	"github.com/whywaita/shoes-lxd-multi/server/pkg/api"
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -125,7 +124,7 @@ func scrapeLXDHost(ctx context.Context, host lxdclient.LXDHost, ch chan<- promet
 
 		ch <- prometheus.MustNewConstMetric(
 			lxdInstance, prometheus.GaugeValue, 1,
-			instance.Name, hostname, instance.Status, instance.Config[api.ConfigKeyResourceType], instance.Config["limits.cpu"], strconv.FormatInt(memory, 10),
+			instance.Name, hostname, instance.Status, instance.Config[lxdclient.ConfigKeyResourceType], instance.Config["limits.cpu"], strconv.FormatInt(memory, 10),
 		)
 	}
 
