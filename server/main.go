@@ -65,6 +65,7 @@ func serveMetrics(ctx context.Context, hostConfigs *config.HostConfigMap) {
 
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(metric.NewCollector(ctx, hcs))
+	registry.MustRegister(metric.FailedAllocateCount)
 	gatherers := prometheus.Gatherers{
 		prometheus.DefaultGatherer,
 		registry,

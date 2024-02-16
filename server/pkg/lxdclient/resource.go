@@ -24,6 +24,13 @@ type Resource struct {
 	MemoryUsed  uint64
 }
 
+const (
+	ConfigKeyResourceType = "user.myshoes_resource_type"
+	ConfigKeyImageAlias   = "user.myshoes_image_alias"
+	ConfigKeyRunnerName   = "user.myshoes_runner_name"
+	ConfigKeyAllocatedAt  = "user.myshoes_allocated_at"
+)
+
 // GetCPUOverCommitPercent calculate percent of over commit
 func GetCPUOverCommitPercent(in Resource) uint64 {
 	return uint64(float64(in.CPUUsed) / float64(in.CPUTotal) * 100.0)
