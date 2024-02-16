@@ -264,7 +264,11 @@ func (a *Agent) deleteInstance(i api.Instance) error {
 	}
 	a.deletingInstances[i.Name] = struct{}{}
 	defer delete(a.deletingInstances, i.Name)
-	stopOp, err := a.Client.UpdateInstanceState(i.Name, api.InstanceStatePut{Action: "stop", Timeout: -1, Force: true}, "")
+	_, etag, err := a.Client.GetInstance(i.Name)
+	if err != nil {
+		return fmt.Errorf("get instance %q: %w", i.Name, err)
+	}
+	stopOp, err := a.Client.UpdateInstanceState(i.Name, api.InstanceStatePut{Action: "stop", Timeout: -1, Force: true}, etag)
 	if err != nil {
 		return fmt.Errorf("failed to stop instance %q: %+v", i.Name, err)
 	}
