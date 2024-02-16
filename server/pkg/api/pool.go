@@ -153,7 +153,7 @@ func allocatePooledInstance(targets []lxdclient.LXDHost, resourceType, imageAlia
 	for _, i := range s {
 		if err := allocateInstance(*i.Host, i.InstanceName, runnerName); err != nil {
 			log.Printf("failed to allocate instance %q in host %q (trying another instance): %+v", i.InstanceName, i.Host.HostConfig.LxdHost, err)
-			metric.FailedAllocateCount.WithLabelValues(i.Host.HostConfig.LxdHost, resourceType, i.InstanceName).Inc()
+			metric.FailedAllocateCount.WithLabelValues(i.Host.HostConfig.LxdHost, resourceType).Inc()
 			continue
 		}
 		return i.Host, i.InstanceName, nil
