@@ -79,9 +79,18 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	}
 	op, err := client.UpdateInstanceState(instanceName, reqState, "")
 	if err != nil {
+		// Do rollback
+		if _, err := client.DeleteInstance(instanceName); err != nil {
+			l.Warn("failed to delete instance", "err", err.Error())
+		}
+
 		return nil, status.Errorf(codes.Internal, "failed to start instance: %+v", err)
 	}
 	if err := op.Wait(); err != nil && !strings.EqualFold(err.Error(), "The instance is already running") {
+		// Do rollback
+		if _, err := client.DeleteInstance(instanceName); err != nil {
+			l.Warn("failed to delete instance", "err", err.Error())
+		}
 		return nil, status.Errorf(codes.Internal, "failed to wait starting instance: %+v", err)
 	}
 
