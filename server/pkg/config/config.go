@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 
@@ -57,6 +58,7 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int64, int, uin
 			return nil, nil, 0, -1, 0, fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
 		}
 	}
+	log.Printf("periodSec: %d\n", periodSec)
 
 	envPort := os.Getenv(EnvPort)
 	var port int
@@ -79,6 +81,7 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int64, int, uin
 			return nil, nil, 0, -1, 0, fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
 		}
 	}
+	log.Printf("overCommitPercent: %d\n", overCommitPercent)
 
 	return hostConfigs, m, periodSec, port, overCommitPercent, nil
 }

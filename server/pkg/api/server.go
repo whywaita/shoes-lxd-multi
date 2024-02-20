@@ -2,7 +2,7 @@ package api
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"sync"
 
@@ -41,7 +41,7 @@ func (s *ShoesLXDMultiServer) Run(listenPort int) error {
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}
-	log.Printf("start listen :%d\n", listenPort)
+	slog.Info("start listen", "port", listenPort)
 
 	grpcServer := grpc.NewServer()
 	pb.RegisterShoesLXDMultiServer(grpcServer, s)
@@ -52,13 +52,14 @@ func (s *ShoesLXDMultiServer) Run(listenPort int) error {
 	return nil
 }
 
-func (s *ShoesLXDMultiServer) validateTargetHosts(targetHosts []string) ([]lxdclient.LXDHost, error) {
+func (s *ShoesLXDMultiServer) validateTargetHosts(targetHosts []string, logger *slog.Logger) ([]lxdclient.LXDHost, error) {
 	var hostConfigs []config.HostConfig
 
 	for _, target := range targetHosts {
+		l := logger.With("target", target)
 		host, err := s.hostConfigs.Load(target)
 		if err != nil {
-			log.Printf("ignore host in target (target: %s): %+v\n", target, err)
+			l.Warn("ignore host in target", "err", err.Error())
 			continue
 		}
 
@@ -69,7 +70,7 @@ func (s *ShoesLXDMultiServer) validateTargetHosts(targetHosts []string) ([]lxdcl
 		return nil, fmt.Errorf("valid target host is not found")
 	}
 
-	targetLXDHosts, err := lxdclient.ConnectLXDs(hostConfigs)
+	targetLXDHosts, _, err := lxdclient.ConnectLXDs(hostConfigs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect LXD: %w", err)
 	}

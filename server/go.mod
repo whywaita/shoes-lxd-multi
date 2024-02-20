@@ -1,6 +1,6 @@
 module github.com/whywaita/shoes-lxd-multi/server
 
-go 1.19
+go 1.21
 
 require (
 	github.com/docker/go-units v0.5.0

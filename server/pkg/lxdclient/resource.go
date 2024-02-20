@@ -3,7 +3,7 @@ package lxdclient
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/config"
@@ -27,7 +27,7 @@ func GetCPUOverCommitPercent(in Resource) uint64 {
 }
 
 // GetResource get Resource
-func GetResource(hostConfig config.HostConfig) (*Resource, error) {
+func GetResource(hostConfig config.HostConfig, logger *slog.Logger) (*Resource, error) {
 	status, err := GetStatusCache(hostConfig.LxdHost)
 	if err == nil {
 		// found from cache
@@ -36,6 +36,8 @@ func GetResource(hostConfig config.HostConfig) (*Resource, error) {
 	if err != nil && !errors.Is(err, ErrCacheNotFound) {
 		return nil, fmt.Errorf("failed to get status from cache: %w", err)
 	}
+
+	logger.Warn("failed to get status from cache, so scrape from lxd")
 
 	client, err := ConnectLXDWithTimeout(hostConfig.LxdHost, hostConfig.LxdClientCert, hostConfig.LxdClientKey)
 	if err != nil {
@@ -110,7 +112,7 @@ func ScrapeLXDHostAllocatedResources(instances []api.Instance) (uint64, uint64, 
 			}
 			allocatedCPU += uint64(cpu)
 		} else {
-			log.Printf("%s hasn't limits.cpu\n", instance.Name)
+			slog.Warn("instance hasn't limits.cpu", "instance", instance.Name)
 		}
 
 		instanceMemory := instance.Config["limits.memory"]
@@ -121,7 +123,7 @@ func ScrapeLXDHostAllocatedResources(instances []api.Instance) (uint64, uint64, 
 			}
 			allocatedMemory += uint64(memory)
 		} else {
-			log.Printf("%s hasn't limits.memory\n", instance.Name)
+			slog.Warn("instance hasn't limits.memory", "instance", instance.Name)
 		}
 	}
 

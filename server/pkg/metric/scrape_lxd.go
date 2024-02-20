@@ -3,16 +3,15 @@ package metric
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"sync"
 
 	"github.com/docker/go-units"
-
-	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
-
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/config"
+	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
 )
 
 const lxdName = "lxd"
@@ -43,6 +42,11 @@ var (
 		"LXD instances",
 		[]string{"instance_name", "stadium_name", "cpu", "memory"}, nil,
 	)
+	lxdConnectErrHost = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, lxdName, "host_connect_error"),
+		"error of connect LXD host",
+		[]string{"hostname", "error_reason"}, nil,
+	)
 )
 
 // ScraperLXD is scraper implement for LXD
@@ -68,9 +72,16 @@ func (ScraperLXD) Scrape(ctx context.Context, hostConfigs []config.HostConfig, c
 }
 
 func scrapeLXDHosts(ctx context.Context, hostConfigs []config.HostConfig, ch chan<- prometheus.Metric) error {
-	hosts, err := lxdclient.ConnectLXDs(hostConfigs)
+	hosts, errHosts, err := lxdclient.ConnectLXDs(hostConfigs)
 	if err != nil {
 		return fmt.Errorf("failed to connect LXD hosts: %w", err)
+	}
+
+	for _, eh := range errHosts {
+		ch <- prometheus.MustNewConstMetric(
+			lxdConnectErrHost, prometheus.GaugeValue, 1,
+			eh.HostConfig.LxdHost, eh.Err.Error(),
+		)
 	}
 
 	wg := sync.WaitGroup{}
@@ -82,7 +93,10 @@ func scrapeLXDHosts(ctx context.Context, hostConfigs []config.HostConfig, ch cha
 			defer wg.Done()
 
 			if err := scrapeLXDHost(host, ch); err != nil {
-				log.Printf("failed to scrape LXD host: %s, %s\n", host.HostConfig.LxdHost, err)
+				slog.With("host", host.HostConfig.LxdHost).Warn(
+					"failed to scrape LXD host",
+					"err", err.Error(),
+				)
 			}
 		}(host)
 	}

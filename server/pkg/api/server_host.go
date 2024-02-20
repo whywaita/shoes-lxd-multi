@@ -3,7 +3,8 @@ package api
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
+	"strings"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -17,7 +18,7 @@ var (
 )
 
 // isExistInstance search created instance in same name
-func (s *ShoesLXDMultiServer) isExistInstance(targetLXDHosts []lxdclient.LXDHost, instanceName string) (*lxdclient.LXDHost, error) {
+func (s *ShoesLXDMultiServer) isExistInstance(targetLXDHosts []lxdclient.LXDHost, instanceName string, logger *slog.Logger) (*lxdclient.LXDHost, error) {
 	eg := errgroup.Group{}
 	var foundHost *lxdclient.LXDHost
 	foundHost = nil
@@ -25,13 +26,20 @@ func (s *ShoesLXDMultiServer) isExistInstance(targetLXDHosts []lxdclient.LXDHost
 	for _, host := range targetLXDHosts {
 		host := host
 		eg.Go(func() error {
+			l := logger.With("host", host.HostConfig.LxdHost)
 			err := isExistInstanceWithTimeout(host, instanceName)
-			if err != nil && !errors.Is(err, ErrTimeoutGetInstance) {
-				log.Printf("failed to get instance with timeout (host: %s): %+v\n", host.HostConfig.LxdHost, err)
-				return nil
-			} else if errors.Is(err, ErrTimeoutGetInstance) {
-				log.Printf("failed to get instance (reach timeout), So ignore host (host: %s)\n", host.HostConfig.LxdHost)
-				return nil
+			if err != nil {
+				switch {
+				case errors.Is(err, ErrInstanceIsNotFound):
+					// not found instance, It's a many case in this. so ignore this host
+					return nil
+				case errors.Is(err, ErrTimeoutGetInstance):
+					l.Warn("failed to get instance (reach timeout), So ignore host", "err", err.Error())
+					return nil
+				default:
+					l.Warn("failed to get instance", "err", err.Error())
+					return nil
+				}
 			}
 
 			foundHost = &host
@@ -64,6 +72,10 @@ func isExistInstanceWithTimeout(targetLXDHost lxdclient.LXDHost, instanceName st
 	select {
 	case err := <-errCh:
 		if err != nil {
+			if strings.Contains(err.Error(), "Instance not found") {
+				return ErrInstanceIsNotFound
+			}
+
 			return fmt.Errorf("failed to found instance: %w", err)
 		}
 

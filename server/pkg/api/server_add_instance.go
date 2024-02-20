@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"math/rand"
 	"net/url"
 	"strconv"
@@ -30,36 +30,38 @@ import (
 
 // AddInstance add instance to LXD server
 func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstanceRequest) (*pb.AddInstanceResponse, error) {
-	log.Printf("AddInstance req: %+v\n", req)
+	slog.Info("AddInstance", "req", req)
+	l := slog.With("method", "AddInstance")
 	if _, err := runner.ToUUID(req.RunnerName); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to parse request name: %+v", err)
 	}
 	instanceName := req.RunnerName
+	l = l.With("runnerName", instanceName)
 
 	instanceSource, err := parseAlias(req.ImageAlias)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to parse image alias: %+v", err)
 	}
 
-	targetLXDHosts, err := s.validateTargetHosts(req.TargetHosts)
+	targetLXDHosts, err := s.validateTargetHosts(req.TargetHosts, l)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to validate target hosts: %+v", err)
 	}
 
-	host, err := s.isExistInstance(targetLXDHosts, instanceName)
+	host, err := s.isExistInstance(targetLXDHosts, instanceName, l)
 	if err != nil && !errors.Is(err, ErrInstanceIsNotFound) {
 		return nil, status.Errorf(codes.Internal, "failed to get instance: %+v", err)
 	}
 
 	var client lxd.InstanceServer
-	var reqInstance api.InstancesPost
+	var reqInstance *api.InstancesPost
 	if errors.Is(err, ErrInstanceIsNotFound) {
 		host, reqInstance, err = s.setLXDStatusCache(targetLXDHosts, instanceName, instanceSource, req)
 		if err != nil {
-			return nil, err
+			return nil, status.Errorf(codes.Internal, "failed to set LXD status cache: %+v", err)
 		}
 		client = host.Client
-		op, err := client.CreateInstance(reqInstance)
+		op, err := client.CreateInstance(*reqInstance)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to create instance: %+v", err)
 		}
@@ -69,6 +71,7 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	} else {
 		client = host.Client
 	}
+	l = l.With("host", host.HostConfig.LxdHost)
 
 	reqState := api.InstanceStatePut{
 		Action:  "start",
@@ -76,9 +79,20 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	}
 	op, err := client.UpdateInstanceState(instanceName, reqState, "")
 	if err != nil {
+		// Do rollback
+		l.Info("failed to start instance, will delete", "err", err.Error(), "failed_method", "client.UpdateInstanceState()")
+		if _, err := client.DeleteInstance(instanceName); err != nil {
+			l.Warn("failed to delete instance", "err", err.Error())
+		}
+
 		return nil, status.Errorf(codes.Internal, "failed to start instance: %+v", err)
 	}
 	if err := op.Wait(); err != nil && !strings.EqualFold(err.Error(), "The instance is already running") {
+		// Do rollback
+		l.Info("failed to start instance, will delete", "err", err.Error(), "failed_method", "op.Wait()")
+		if _, err := client.DeleteInstance(instanceName); err != nil {
+			l.Warn("failed to delete instance", "err", err.Error())
+		}
 		return nil, status.Errorf(codes.Internal, "failed to wait starting instance: %+v", err)
 	}
 
@@ -86,7 +100,7 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to retrieve instance information: %+v", err)
 	}
-	log.Printf("Success AddInstance host: %s, runnerName: %s\n", host.HostConfig.LxdHost, i.Name)
+	l.Info("Success AddInstance", "host", host.HostConfig.LxdHost, "runnerName", i.Name)
 
 	return &pb.AddInstanceResponse{
 		CloudId:      i.Name,
@@ -96,17 +110,23 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	}, nil
 }
 
-func (s *ShoesLXDMultiServer) setLXDStatusCache(targetLXDHosts []lxdclient.LXDHost, instanceName string, instanceSource *api.InstanceSource, req *pb.AddInstanceRequest) (*lxdclient.LXDHost, api.InstancesPost, error) {
+func (s *ShoesLXDMultiServer) setLXDStatusCache(
+	targetLXDHosts []lxdclient.LXDHost,
+	instanceName string,
+	instanceSource *api.InstanceSource,
+	req *pb.AddInstanceRequest,
+) (*lxdclient.LXDHost, *api.InstancesPost, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	host, err := s.scheduleHost(targetLXDHosts)
 	if err != nil {
-		return nil, api.InstancesPost{}, status.Errorf(codes.InvalidArgument, "failed to schedule host: %+v", err)
+		return nil, nil, status.Errorf(codes.InvalidArgument, "failed to schedule host: %+v", err)
 	}
-	log.Printf("AddInstance scheduled host: %s, runnerName: %s\n", host.HostConfig.LxdHost, instanceName)
+	l := slog.With("host", host.HostConfig.LxdHost)
+	l.Info("AddInstance scheduled host", "runnerName", instanceName)
 
-	reqInstance := api.InstancesPost{
+	reqInstance := &api.InstancesPost{
 		InstancePut: api.InstancePut{
 			Config:  s.getInstanceConfig(req.SetupScript, req.ResourceType),
 			Devices: s.getInstanceDevices(),
@@ -117,22 +137,22 @@ func (s *ShoesLXDMultiServer) setLXDStatusCache(targetLXDHosts []lxdclient.LXDHo
 
 	cpu, err := strconv.ParseUint(reqInstance.InstancePut.Config["limits.cpu"], 10, 64)
 	if err != nil {
-		return nil, api.InstancesPost{}, fmt.Errorf("failde to parse limits.cpu: %w", err)
+		return nil, nil, fmt.Errorf("failde to parse limits.cpu: %w", err)
 	}
 
 	memory, err := units.FromHumanSize(reqInstance.InstancePut.Config["limits.memory"])
 	if err != nil {
-		return nil, api.InstancesPost{}, fmt.Errorf("failde to parse limits.memory: %w", err)
+		return nil, nil, fmt.Errorf("failde to parse limits.memory: %w", err)
 	}
 
 	cache, err := lxdclient.GetStatusCache(host.HostConfig.LxdHost)
 	if err != nil {
-		return nil, api.InstancesPost{}, err
+		return nil, nil, err
 	}
 	cache.Resource.CPUUsed += cpu
 	cache.Resource.MemoryUsed += uint64(memory)
 	if err := lxdclient.SetStatusCache(host.HostConfig.LxdHost, cache); err != nil {
-		return nil, api.InstancesPost{}, fmt.Errorf("failed to set status cache: %s", err)
+		return nil, nil, fmt.Errorf("failed to set status cache: %s", err)
 	}
 	return host, reqInstance, nil
 }
@@ -198,9 +218,10 @@ func getResources(targetLXDHosts []lxdclient.LXDHost) ([]targetHost, error) {
 	for _, t := range targetLXDHosts {
 		t := t
 		eg.Go(func() error {
-			resources, err := lxdclient.GetResource(t.HostConfig)
+			l := slog.With("host", t.HostConfig.LxdHost)
+			resources, err := lxdclient.GetResource(t.HostConfig, l)
 			if err != nil {
-				log.Printf("failed to get resource (host: %s): %+v\n", t.HostConfig.LxdHost, err)
+				l.Warn("failed to get resource", "err", err.Error())
 				return nil
 			}
 
@@ -231,10 +252,11 @@ var (
 func schedule(targets []targetHost, limitOverCommit uint64) (*targetHost, error) {
 	var schedulableTargets []targetHost
 	for _, target := range targets {
+		l := slog.With("host", target.host.HostConfig.LxdHost)
 		if target.percentOverCommit < limitOverCommit {
 			schedulableTargets = append(schedulableTargets, target)
 		} else {
-			log.Printf("%s is percentage of over-commit is high. ignore (now: %d, limit: %d)", target.host.HostConfig.LxdHost, target.percentOverCommit, limitOverCommit)
+			l.Info("is percentage of over-commit is high. ignore", "now", target.percentOverCommit, "limit", limitOverCommit)
 		}
 	}
 	if len(schedulableTargets) == 0 {
