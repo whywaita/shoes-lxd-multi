@@ -78,7 +78,7 @@ func serveMetrics(ctx context.Context, hostConfigs *config.HostConfigMap) {
 	))
 
 	if err := http.ListenAndServe(":9090", nil); err != nil {
-		log.Fatal(err)
+		log.Fatal("failed to serve metrics (port 9090)", "err", err.Error())
 	}
 }
 
@@ -86,7 +86,7 @@ func setLXDResourceCacheWithTicker(hcs []config.HostConfig, ticker *time.Ticker)
 	for {
 		<-ticker.C
 		if err := setLXDResourceCache(hcs); err != nil {
-			log.Fatal(err)
+			log.Fatal("failed to set lxd resource cache", "err", err.Error())
 		}
 	}
 }
@@ -98,8 +98,10 @@ func setLXDResourceCache(hcs []config.HostConfig) error {
 	}
 
 	for _, host := range hosts {
+		l := slog.With("host", host.HostConfig.LxdHost)
 		if err := setLXDHostResourceCache(&host); err != nil {
-			return err
+			l.Warn("failed to set lxd host resource cache", "err", err.Error())
+			continue
 		}
 	}
 	return nil
