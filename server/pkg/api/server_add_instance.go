@@ -86,37 +86,31 @@ func (s *ShoesLXDMultiServer) addInstanceCreateMode(ctx context.Context, targetL
 		return nil, "", status.Errorf(codes.Internal, "failed to get instance: %+v", err)
 	}
 
-	var client lxd.InstanceServer
 	if errors.Is(err, ErrInstanceIsNotFound) {
 		var reqInstance *api.InstancesPost
 		host, reqInstance, err = s.setLXDStatusCache(ctx, targetLXDHosts, instanceName, instanceSource, req)
 		if err != nil {
 			return nil, "", status.Errorf(codes.Internal, "failed to set LXD status cache: %+v", err)
 		}
-		client = host.Client
-		op, err := client.CreateInstance(*reqInstance)
+		op, err := host.Client.CreateInstance(*reqInstance)
 		if err != nil {
 			return nil, "", status.Errorf(codes.Internal, "failed to create instance: %+v", err)
 		}
 		if err := op.Wait(); err != nil {
 			return nil, "", status.Errorf(codes.Internal, "failed to wait creating instance: %+v", err)
 		}
-	} else {
-		client = host.Client
 	}
-
 	l = l.With("host", host.HostConfig.LxdHost)
 
 	reqState := api.InstanceStatePut{
 		Action:  "start",
 		Timeout: -1,
 	}
-	op, err := client.UpdateInstanceState(instanceName, reqState, "")
+	op, err := host.Client.UpdateInstanceState(instanceName, reqState, "")
 	if err != nil {
 		// Do rollback
 		l.Info("failed to start instance, will delete", "err", err.Error(), "failed_method", "client.UpdateInstanceState()")
-		op, err := client.DeleteInstance(instanceName)
-		if err != nil {
+		if _, err := host.Client.DeleteInstance(instanceName); err != nil {
 			l.Warn("failed to delete instance", "err", err.Error())
 			return nil, "", status.Errorf(codes.Internal, "failed to wait starting instance: %+v", err)
 		}
@@ -129,8 +123,7 @@ func (s *ShoesLXDMultiServer) addInstanceCreateMode(ctx context.Context, targetL
 	if err := op.Wait(); err != nil && !strings.EqualFold(err.Error(), "The instance is already running") {
 		// Do rollback
 		l.Info("failed to start instance, will delete", "err", err.Error(), "failed_method", "op.Wait()")
-		op, err := client.DeleteInstance(instanceName)
-		if err != nil {
+		if _, err := host.Client.DeleteInstance(instanceName); err != nil {
 			l.Warn("failed to delete instance", "err", err.Error())
 			return nil, "", status.Errorf(codes.Internal, "failed to wait starting instance: %+v", err)
 		}
