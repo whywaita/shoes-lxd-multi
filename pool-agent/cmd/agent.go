@@ -162,6 +162,9 @@ func (a *Agent) checkInstances(ctx context.Context) error {
 		if !ok {
 			toDelete = append(toDelete, rt.Name)
 			continue
+		} else if rtCount == 0 {
+			toDelete = append(toDelete, rt.Name)
+			continue
 		}
 		createCount := rtCount - current - creating
 		if createCount < 1 {
