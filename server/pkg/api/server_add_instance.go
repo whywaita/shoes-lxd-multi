@@ -48,7 +48,7 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	var instanceName string
 
 	if s.poolMode {
-		host, instanceName, err = s.addInstancePoolMode(targetLXDHosts, req, l)
+		host, instanceName, err = s.addInstancePoolMode(ctx, targetLXDHosts, req, l)
 		if err != nil {
 			return nil, err
 		}
@@ -144,14 +144,14 @@ func (s *ShoesLXDMultiServer) addInstanceCreateMode(ctx context.Context, targetL
 	return host, instanceName, nil
 }
 
-func (s *ShoesLXDMultiServer) addInstancePoolMode(targets []lxdclient.LXDHost, req *pb.AddInstanceRequest, l *slog.Logger) (*lxdclient.LXDHost, string, error) {
-	host, instanceName, found := findInstanceByJob(targets, req.RunnerName)
+func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets []lxdclient.LXDHost, req *pb.AddInstanceRequest, l *slog.Logger) (*lxdclient.LXDHost, string, error) {
+	host, instanceName, found := findInstanceByJob(ctx, targets, req.RunnerName, l)
 	if !found {
 		resourceTypeName := datastore.UnmarshalResourceTypePb(req.ResourceType).String()
 		retried := 0
 		for {
 			var err error
-			host, instanceName, err = allocatePooledInstance(targets, resourceTypeName, req.ImageAlias, s.overCommitPercent, req.RunnerName)
+			host, instanceName, err = allocatePooledInstance(ctx, targets, resourceTypeName, req.ImageAlias, s.overCommitPercent, req.RunnerName, l)
 			if err != nil {
 				if retried < 10 {
 					retried++
