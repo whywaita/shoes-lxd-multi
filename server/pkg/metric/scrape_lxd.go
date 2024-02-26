@@ -78,6 +78,10 @@ func scrapeLXDHosts(ctx context.Context, hostConfigs []config.HostConfig, ch cha
 	}
 
 	for _, eh := range errHosts {
+		slog.With("host", eh.HostConfig.LxdHost).Warn(
+			"failed to connect LXD host",
+			"eh", eh,
+		)
 		ch <- prometheus.MustNewConstMetric(
 			lxdConnectErrHost, prometheus.GaugeValue, 1,
 			eh.HostConfig.LxdHost,
