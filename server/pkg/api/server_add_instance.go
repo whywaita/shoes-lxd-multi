@@ -81,8 +81,12 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	if err != nil {
 		// Do rollback
 		l.Info("failed to start instance, will delete", "err", err.Error(), "failed_method", "client.UpdateInstanceState()")
-		if _, err := client.DeleteInstance(instanceName); err != nil {
+		op, err := client.DeleteInstance(instanceName)
+		if err != nil {
 			l.Warn("failed to delete instance", "err", err.Error())
+		}
+		if err := op.Wait(); err != nil {
+			l.Warn("failed to wait deleting instance", "err", err.Error())
 		}
 
 		return nil, status.Errorf(codes.Internal, "failed to start instance: %+v", err)
@@ -90,9 +94,14 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	if err := op.Wait(); err != nil && !strings.EqualFold(err.Error(), "The instance is already running") {
 		// Do rollback
 		l.Info("failed to start instance, will delete", "err", err.Error(), "failed_method", "op.Wait()")
-		if _, err := client.DeleteInstance(instanceName); err != nil {
+		op, err := client.DeleteInstance(instanceName)
+		if err != nil {
 			l.Warn("failed to delete instance", "err", err.Error())
 		}
+		if err := op.Wait(); err != nil {
+			l.Warn("failed to wait deleting instance", "err", err.Error())
+		}
+
 		return nil, status.Errorf(codes.Internal, "failed to wait starting instance: %+v", err)
 	}
 
