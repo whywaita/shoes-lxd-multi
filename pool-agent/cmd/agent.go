@@ -35,6 +35,10 @@ type Agent struct {
 	}
 }
 
+var (
+	ErrAlreadyStopped = errors.New("The instance is already stopped")
+)
+
 type instances map[string]struct{}
 
 func newAgent(ctx context.Context, conf Config) (*Agent, error) {
@@ -272,10 +276,10 @@ func (a *Agent) deleteInstance(i api.Instance) error {
 		return fmt.Errorf("get instance %q: %w", i.Name, err)
 	}
 	stopOp, err := a.Client.UpdateInstanceState(i.Name, api.InstanceStatePut{Action: "stop", Timeout: -1, Force: true}, etag)
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrAlreadyStopped) {
 		return fmt.Errorf("failed to stop instance %q: %+v", i.Name, err)
 	}
-	if err := stopOp.Wait(); err != nil {
+	if err := stopOp.Wait(); err != nil && !errors.Is(err, ErrAlreadyStopped) {
 		return fmt.Errorf("failed to stop instance %q: %+v", i.Name, err)
 	}
 	deleteOp, err := a.Client.DeleteInstance(i.Name)
