@@ -1,6 +1,7 @@
 package lxdclient
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 	"github.com/docker/go-units"
 	lxd "github.com/lxc/lxd/client"
 	"github.com/lxc/lxd/shared/api"
+	"github.com/whywaita/xsemaphore"
 )
 
 // Resource is resource of lxd host
@@ -27,7 +29,7 @@ func GetCPUOverCommitPercent(in Resource) uint64 {
 }
 
 // GetResource get Resource
-func GetResource(hostConfig config.HostConfig, logger *slog.Logger) (*Resource, error) {
+func GetResource(ctx context.Context, hostConfig config.HostConfig, logger *slog.Logger) (*Resource, error) {
 	status, err := GetStatusCache(hostConfig.LxdHost)
 	if err == nil {
 		// found from cache
@@ -39,22 +41,50 @@ func GetResource(hostConfig config.HostConfig, logger *slog.Logger) (*Resource, 
 
 	logger.Warn("failed to get status from cache, so scrape from lxd")
 
-	client, err := ConnectLXDWithTimeout(hostConfig.LxdHost, hostConfig.LxdClientCert, hostConfig.LxdClientKey)
+	r, _, _, err := GetResourceFromLXD(ctx, hostConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect lxd: %w", err)
+		return nil, fmt.Errorf("failed to get resource from lxd: %w", err)
+	}
+	s := LXDStatus{
+		Resource:   *r,
+		HostConfig: hostConfig,
+	}
+	if err := SetStatusCache(hostConfig.LxdHost, s); err != nil {
+		return nil, fmt.Errorf("failed to set status to cache: %w", err)
 	}
 
-	cpuTotal, memoryTotal, _, err := ScrapeLXDHostResources(*client)
+	return r, nil
+}
+
+// GetResourceFromLXD get resources from LXD API
+func GetResourceFromLXD(ctx context.Context, hostConfig config.HostConfig) (*Resource, []api.Instance, string, error) {
+	client, err := ConnectLXDWithTimeout(hostConfig.LxdHost, hostConfig.LxdClientCert, hostConfig.LxdClientKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to scrape total resource: %w", err)
+		return nil, nil, "", fmt.Errorf("failed to connect lxd: %w", err)
 	}
-	instances, err := GetAnyInstances(*client)
+
+	return GetResourceFromLXDWithClient(ctx, *client, hostConfig.LxdHost)
+}
+
+// GetResourceFromLXDWithClient get resources from LXD API with client
+func GetResourceFromLXDWithClient(ctx context.Context, client lxd.InstanceServer, host string) (*Resource, []api.Instance, string, error) {
+	sem := xsemaphore.Get(host, 1)
+	if err := sem.Acquire(ctx, 1); err != nil {
+		return nil, nil, "", fmt.Errorf("failed to acquire semaphore: %w", err)
+	}
+	defer sem.Release(1)
+
+	cpuTotal, memoryTotal, hostname, err := ScrapeLXDHostResources(client)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve list of instance: %w", err)
+		return nil, nil, "", fmt.Errorf("failed to scrape total resource: %w", err)
+	}
+	instances, err := GetAnyInstances(client)
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("failed to retrieve list of instance: %w", err)
 	}
 	cpuUsed, memoryUsed, err := ScrapeLXDHostAllocatedResources(instances)
 	if err != nil {
-		return nil, fmt.Errorf("failed to scrape allocated resource: %w", err)
+		return nil, nil, "", fmt.Errorf("failed to scrape allocated resource: %w", err)
 	}
 
 	r := Resource{
@@ -63,15 +93,8 @@ func GetResource(hostConfig config.HostConfig, logger *slog.Logger) (*Resource, 
 		CPUUsed:     cpuUsed,
 		MemoryUsed:  memoryUsed,
 	}
-	s := LXDStatus{
-		Resource:   r,
-		HostConfig: hostConfig,
-	}
-	if err := SetStatusCache(hostConfig.LxdHost, s); err != nil {
-		return nil, fmt.Errorf("failed to set status to cache: %w", err)
-	}
 
-	return &r, nil
+	return &r, instances, hostname, nil
 }
 
 // ScrapeLXDHostResources scrape all resources

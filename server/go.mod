@@ -1,6 +1,6 @@
 module github.com/whywaita/shoes-lxd-multi/server
 
-go 1.21
+go 1.22.0
 
 require (
 	github.com/docker/go-units v0.5.0
@@ -9,7 +9,8 @@ require (
 	github.com/prometheus/client_golang v1.12.1
 	github.com/whywaita/myshoes v1.14.0
 	github.com/whywaita/shoes-lxd-multi/proto.go v0.0.0-20230331051154-d763b94b0dd7
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+	github.com/whywaita/xsemaphore v0.0.0-20240305080042-cf6ba671d2e7
+	golang.org/x/sync v0.6.0
 	google.golang.org/grpc v1.54.0
 )
 

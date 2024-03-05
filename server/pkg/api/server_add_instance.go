@@ -56,7 +56,7 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	var client lxd.InstanceServer
 	var reqInstance *api.InstancesPost
 	if errors.Is(err, ErrInstanceIsNotFound) {
-		host, reqInstance, err = s.setLXDStatusCache(targetLXDHosts, instanceName, instanceSource, req)
+		host, reqInstance, err = s.setLXDStatusCache(ctx, targetLXDHosts, instanceName, instanceSource, req)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to set LXD status cache: %+v", err)
 		}
@@ -120,6 +120,7 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 }
 
 func (s *ShoesLXDMultiServer) setLXDStatusCache(
+	ctx context.Context,
 	targetLXDHosts []lxdclient.LXDHost,
 	instanceName string,
 	instanceSource *api.InstanceSource,
@@ -128,7 +129,7 @@ func (s *ShoesLXDMultiServer) setLXDStatusCache(
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	host, err := s.scheduleHost(targetLXDHosts)
+	host, err := s.scheduleHost(ctx, targetLXDHosts)
 	if err != nil {
 		return nil, nil, status.Errorf(codes.InvalidArgument, "failed to schedule host: %+v", err)
 	}
@@ -205,8 +206,8 @@ type targetHost struct {
 	percentOverCommit uint64
 }
 
-func (s *ShoesLXDMultiServer) scheduleHost(targetLXDHosts []lxdclient.LXDHost) (*lxdclient.LXDHost, error) {
-	targets, err := getResources(targetLXDHosts)
+func (s *ShoesLXDMultiServer) scheduleHost(ctx context.Context, targetLXDHosts []lxdclient.LXDHost) (*lxdclient.LXDHost, error) {
+	targets, err := getResources(ctx, targetLXDHosts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resources: %w", err)
 	}
@@ -218,7 +219,7 @@ func (s *ShoesLXDMultiServer) scheduleHost(targetLXDHosts []lxdclient.LXDHost) (
 	return &(target.host), nil
 }
 
-func getResources(targetLXDHosts []lxdclient.LXDHost) ([]targetHost, error) {
+func getResources(ctx context.Context, targetLXDHosts []lxdclient.LXDHost) ([]targetHost, error) {
 	var targets []targetHost
 
 	eg := errgroup.Group{}
@@ -228,7 +229,7 @@ func getResources(targetLXDHosts []lxdclient.LXDHost) ([]targetHost, error) {
 		t := t
 		eg.Go(func() error {
 			l := slog.With("host", t.HostConfig.LxdHost)
-			resources, err := lxdclient.GetResource(t.HostConfig, l)
+			resources, err := lxdclient.GetResource(ctx, t.HostConfig, l)
 			if err != nil {
 				l.Warn("failed to get resource", "err", err.Error())
 				return nil
