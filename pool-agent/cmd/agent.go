@@ -12,6 +12,7 @@ import (
 	"github.com/lxc/lxd/shared/api"
 	"github.com/pkg/errors"
 	slm "github.com/whywaita/shoes-lxd-multi/server/pkg/api"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Agent is an agent for pool mode.
@@ -19,9 +20,9 @@ type Agent struct {
 	ImageAlias     string
 	InstanceSource api.InstanceSource
 
-	ResourceTypesMap   []ResourceTypesMap
-	ResouceTypesCounts ResourceTypesCounts
-	Client             lxd.InstanceServer
+	ResourceTypesMap    []ResourceTypesMap
+	ResourceTypesCounts ResourceTypesCounts
+	Client              lxd.InstanceServer
 
 	CheckInterval   time.Duration
 	WaitIdleTime    time.Duration
@@ -33,6 +34,8 @@ type Agent struct {
 		Hash      string
 		CreatedAt time.Time
 	}
+	registry       *prometheus.Registry
+	instancesCache []api.Instance
 }
 
 var (
@@ -41,7 +44,11 @@ var (
 
 type instances map[string]struct{}
 
-func newAgent(ctx context.Context, conf Config) (*Agent, error) {
+func newAgent(ctx context.Context) (*Agent, error) {
+	conf, err := LoadConfig()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to load config")
+	}
 	source, err := slm.ParseAlias(conf.ImageAlias)
 	if err != nil {
 		return nil, err
@@ -58,13 +65,16 @@ func newAgent(ctx context.Context, conf Config) (*Agent, error) {
 	for _, rt := range conf.ResourceTypesMap {
 		creatingInstances[rt.Name] = make(instances)
 	}
+
+	registry := prometheus.NewRegistry()
+	registry.Register(configuredInstancesCount)
 	agent := &Agent{
 		ImageAlias:     conf.ImageAlias,
 		InstanceSource: *source,
 
-		ResourceTypesMap:   conf.ResourceTypesMap,
-		ResouceTypesCounts: conf.ResourceTypesCounts,
-		Client:             c,
+		ResourceTypesMap:    conf.ResourceTypesMap,
+		ResourceTypesCounts: conf.ResourceTypesCounts,
+		Client:              c,
 
 		CheckInterval:   checkInterval,
 		WaitIdleTime:    waitIdleTime,
@@ -76,16 +86,18 @@ func newAgent(ctx context.Context, conf Config) (*Agent, error) {
 
 		creatingInstances: creatingInstances,
 		deletingInstances: make(instances),
+		registry:          registry,
 	}
 	return agent, nil
 }
 
-func (a *Agent) reloadConfig(ctx context.Context) {
+func (a *Agent) reloadConfig() {
 	conf, err := LoadConfig()
 	if err != nil {
 		log.Printf("failed to load config: %+v", err)
 		return
 	}
+
 	if conf.ImageAlias != a.ImageAlias {
 		source, err := slm.ParseAlias(conf.ImageAlias)
 		if err != nil {
@@ -96,7 +108,7 @@ func (a *Agent) reloadConfig(ctx context.Context) {
 		a.ImageAlias = conf.ImageAlias
 	}
 	a.ResourceTypesMap = conf.ResourceTypesMap
-	a.ResouceTypesCounts = conf.ResourceTypesCounts
+	a.ResourceTypesCounts = conf.ResourceTypesCounts
 }
 
 // Run runs the agent.
@@ -110,9 +122,9 @@ func (a *Agent) Run(ctx context.Context, sigHupCh chan os.Signal) error {
 		select {
 		case <-sigHupCh:
 			log.Println("Received SIGHUP. Reloading config...")
-			a.reloadConfig(ctx)
+			a.reloadConfig()
 		case <-ticker.C:
-			if err := a.checkInstances(ctx); err != nil {
+			if err := a.checkInstances(); err != nil {
 				log.Printf("failed to check instances: %+v", err)
 			}
 		case <-ctx.Done():
@@ -142,7 +154,7 @@ func (a *Agent) countPooledInstances(instances []api.Instance, resourceTypeName 
 	return count
 }
 
-func (a *Agent) generateInstanceName() (string, error) {
+func generateInstanceName() (string, error) {
 	var b [4]byte
 	_, err := rand.Read(b[:])
 	if err != nil {
@@ -151,8 +163,9 @@ func (a *Agent) generateInstanceName() (string, error) {
 	return fmt.Sprintf("myshoes-runner-%x", b), nil
 }
 
-func (a *Agent) checkInstances(ctx context.Context) error {
-	s, err := a.Client.GetInstances(api.InstanceTypeAny)
+func (a *Agent) checkInstances() error {
+	var err error
+	a.instancesCache, err = a.Client.GetInstances(api.InstanceTypeAny)
 	if err != nil {
 		return fmt.Errorf("get instances: %w", err)
 	}
@@ -160,9 +173,9 @@ func (a *Agent) checkInstances(ctx context.Context) error {
 	toDelete := []string{}
 
 	for _, rt := range a.ResourceTypesMap {
-		current := a.countPooledInstances(s, rt.Name)
+		current := a.countPooledInstances(a.instancesCache, rt.Name)
 		creating := len(a.creatingInstances[rt.Name])
-		rtCount, ok := a.ResouceTypesCounts[rt.Name]
+		rtCount, ok := a.ResourceTypesCounts[rt.Name]
 		if !ok {
 			toDelete = append(toDelete, rt.Name)
 			continue
@@ -176,7 +189,7 @@ func (a *Agent) checkInstances(ctx context.Context) error {
 		}
 		log.Printf("Create %d instances for %q", createCount, rt.Name)
 		for i := 0; i < createCount; i++ {
-			name, err := a.generateInstanceName()
+			name, err := generateInstanceName()
 			if err != nil {
 				return fmt.Errorf("generate instance name: %w", err)
 			}
@@ -190,8 +203,8 @@ func (a *Agent) checkInstances(ctx context.Context) error {
 		}
 	}
 
-	for _, i := range s {
-		if _, ok := a.ResouceTypesCounts[i.Config[configKeyResourceType]]; !ok {
+	for _, i := range a.instancesCache {
+		if _, ok := a.ResourceTypesCounts[i.Config[configKeyResourceType]]; !ok {
 			toDelete = append(toDelete, i.Config[configKeyResourceType])
 		}
 		for _, rt := range toDelete {
