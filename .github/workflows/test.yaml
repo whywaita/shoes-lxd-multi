@@ -25,6 +25,7 @@ jobs:
           go-version-file: ${{ matrix.target }}/go.mod
       - name: lint
         run: |
+          cd ${{ matrix.target }}
           go install honnef.co/go/tools/cmd/staticcheck@latest
           staticcheck ./...
       - name: go vet
