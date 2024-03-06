@@ -32,7 +32,7 @@ func reloadLXDHostResourceCache(ctx context.Context, hcs []config.HostConfig) er
 
 	for _, host := range hosts {
 		l := slog.With("host", host.HostConfig.LxdHost)
-		if err := setLXDHostResourceCache(ctx, &host); err != nil {
+		if err := setLXDHostResourceCache(ctx, &host, l); err != nil {
 			l.Warn("failed to set lxd host resource cache", "err", err.Error())
 			continue
 		}
@@ -40,8 +40,8 @@ func reloadLXDHostResourceCache(ctx context.Context, hcs []config.HostConfig) er
 	return nil
 }
 
-func setLXDHostResourceCache(ctx context.Context, host *lxdclient.LXDHost) error {
-	resources, _, _, err := lxdclient.GetResourceFromLXDWithClient(ctx, host.Client, host.HostConfig.LxdHost)
+func setLXDHostResourceCache(ctx context.Context, host *lxdclient.LXDHost, logger *slog.Logger) error {
+	resources, _, _, err := lxdclient.GetResourceFromLXDWithClient(ctx, host.Client, host.HostConfig.LxdHost, logger)
 	if err != nil {
 		return fmt.Errorf("failed to get resource from lxd: %s", err)
 	}
