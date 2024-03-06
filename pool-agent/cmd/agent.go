@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"time"
 
@@ -34,8 +34,7 @@ type Agent struct {
 		Hash      string
 		CreatedAt time.Time
 	}
-	registry       *prometheus.Registry
-	instancesCache []api.Instance
+	registry *prometheus.Registry
 }
 
 var (
@@ -68,6 +67,10 @@ func newAgent(ctx context.Context) (*Agent, error) {
 
 	registry := prometheus.NewRegistry()
 	registry.Register(configuredInstancesCount)
+	registry.Register(lxdInstances)
+	for k, v := range conf.ResourceTypesCounts {
+		configuredInstancesCount.WithLabelValues(k).Set(float64(v))
+	}
 	agent := &Agent{
 		ImageAlias:     conf.ImageAlias,
 		InstanceSource: *source,
@@ -94,14 +97,18 @@ func newAgent(ctx context.Context) (*Agent, error) {
 func (a *Agent) reloadConfig() {
 	conf, err := LoadConfig()
 	if err != nil {
-		log.Printf("failed to load config: %+v", err)
+		slog.Error("failed to reloadconfig", "err", err.Error())
 		return
+	}
+
+	for k, v := range conf.ResourceTypesCounts {
+		configuredInstancesCount.WithLabelValues(k).Set(float64(v))
 	}
 
 	if conf.ImageAlias != a.ImageAlias {
 		source, err := slm.ParseAlias(conf.ImageAlias)
 		if err != nil {
-			log.Printf("failed to parse image alias: %+v", err)
+			slog.Error("parse image alias: %+v", "err", err.Error())
 			return
 		}
 		a.InstanceSource = *source
@@ -116,19 +123,22 @@ func (a *Agent) Run(ctx context.Context, sigHupCh chan os.Signal) error {
 	ticker := time.NewTicker(a.CheckInterval)
 	defer ticker.Stop()
 
-	log.Println("Started agent")
+	slog.Info("Started agent")
 
 	for {
 		select {
 		case <-sigHupCh:
-			log.Println("Received SIGHUP. Reloading config...")
+			slog.Info("Received SIGHUP. Reloading config...")
 			a.reloadConfig()
 		case <-ticker.C:
 			if err := a.checkInstances(); err != nil {
-				log.Printf("failed to check instances: %+v", err)
+				slog.Error("failed to check instances", "err", err.Error())
+			}
+			if err := prometheus.WriteToTextfile(metricsPath, a.registry); err != nil {
+				slog.Error("failed to write metrics: %+v", "err", err.Error())
 			}
 		case <-ctx.Done():
-			log.Printf("Stopping agent...")
+			slog.Info("Stopping agent...")
 			return nil
 		}
 	}
@@ -164,8 +174,7 @@ func generateInstanceName() (string, error) {
 }
 
 func (a *Agent) checkInstances() error {
-	var err error
-	a.instancesCache, err = a.Client.GetInstances(api.InstanceTypeAny)
+	s, err := a.Client.GetInstances(api.InstanceTypeAny)
 	if err != nil {
 		return fmt.Errorf("get instances: %w", err)
 	}
@@ -173,7 +182,7 @@ func (a *Agent) checkInstances() error {
 	toDelete := []string{}
 
 	for _, rt := range a.ResourceTypesMap {
-		current := a.countPooledInstances(a.instancesCache, rt.Name)
+		current := a.countPooledInstances(s, rt.Name)
 		creating := len(a.creatingInstances[rt.Name])
 		rtCount, ok := a.ResourceTypesCounts[rt.Name]
 		if !ok {
@@ -187,50 +196,54 @@ func (a *Agent) checkInstances() error {
 		if createCount < 1 {
 			continue
 		}
-		log.Printf("Create %d instances for %q", createCount, rt.Name)
+		slog.Info("Create instances", "count", createCount, "flavor", rt.Name)
 		for i := 0; i < createCount; i++ {
 			name, err := generateInstanceName()
 			if err != nil {
 				return fmt.Errorf("generate instance name: %w", err)
 			}
+			l := slog.With("instance", name, "flavor", rt.Name)
 			a.creatingInstances[rt.Name][name] = struct{}{}
 
 			defer delete(a.creatingInstances[rt.Name], name)
 
-			if err := a.createInstance(name, rt); err != nil {
-				log.Printf("failed to create instance %q: %+v", name, err)
+			if err := a.createInstance(name, rt, l); err != nil {
+				l.Error("failed to create instance", "err", err.Error())
 			}
 		}
 	}
 
-	for _, i := range a.instancesCache {
+	for _, i := range s {
+		l := slog.With("instance", i.Name)
+		lxdInstances.WithLabelValues(i.Name, i.Status, i.Config[configKeyResourceType]).Set(1)
 		if _, ok := a.ResourceTypesCounts[i.Config[configKeyResourceType]]; !ok {
 			toDelete = append(toDelete, i.Config[configKeyResourceType])
 		}
 		for _, rt := range toDelete {
 			if i.Config[configKeyResourceType] == rt {
-				log.Printf("Deleting disabled resource type instance %q...", i.Name)
+				l := l.With("flavor", rt)
+				l.Info("Deleting disabled flavor instances")
 				if err := a.deleteInstance(i); err != nil {
-					log.Printf("failed to delete instance %q: %+v", i.Name, err)
+					l.Error("failed to delete instance", "err", err.Error())
 				}
-				log.Printf("Deleted disabled resource type instance %q", i.Name)
+				l.Info("Deleted disabled flavor instance")
 			}
 		}
 		if a.isZombieInstance(i) {
-			log.Printf("Deleting zombie instance %q...", i.Name)
+			l.Info("Deleting zombie instance")
 			if err := a.deleteInstance(i); err != nil {
-				log.Printf("failed to delete zombie instance %q: %+v", i.Name, err)
+				l.Error("failed to delete zombie instance", "err", err.Error())
 			}
-			log.Printf("Deleted zombie instance %q", i.Name)
+			l.Info("Deleted zombie instance")
 		}
 		if isOld, err := a.isOldImageInstance(i); err != nil {
-			log.Printf("failed to check old image instance %q: %+v", i.Name, err)
+			l.Error("failed to check old image instance", "err", err.Error())
 		} else if isOld {
-			log.Printf("Deleting old image instance %q...", i.Name)
+			l.Info("Deleting old image instance")
 			if err := a.deleteInstance(i); err != nil {
-				log.Printf("failed to delete old image instance %q: %+v", i.Name, err)
+				l.Error("failed to delete old image instance", "err", err.Error())
 			}
-			log.Printf("Deleted old image instance %q", i.Name)
+			l.Info("Deleted old image instance")
 		}
 	}
 

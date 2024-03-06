@@ -14,23 +14,13 @@ var (
 		},
 		[]string{"flavor"},
 	)
-	lxdInstances = prometheus.NewDesc(
-		prometheus.BuildFQName("pool_agent", "lxd", "instance"),
-		"LXD instances",
-		[]string{"instance_name", "status", "flavor"}, nil,
+	lxdInstances = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name:      "instances",
+			Help:      "LXD instances",
+			Subsystem: "lxd",
+			Namespace: "pool_agent",
+		},
+		[]string{"instance_name", "status", "flavor"},
 	)
 )
-
-func (a *Agent) Describe(ch chan<- *prometheus.Desc) {
-	configuredInstancesCount.Describe(ch)
-}
-
-func (a *Agent) Collect(ch chan<- prometheus.Metric) {
-	for k, v := range a.ResourceTypesCounts {
-		configuredInstancesCount.WithLabelValues(k).Set(float64(v))
-		ch <- configuredInstancesCount.WithLabelValues(k)
-	}
-	for _, i := range a.instancesCache {
-		ch <- prometheus.MustNewConstMetric(lxdInstances, prometheus.GaugeValue, 1, i.Name, i.Status, i.Config["user.myshoes_resource_type"])
-	}
-}
