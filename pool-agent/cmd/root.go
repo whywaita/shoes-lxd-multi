@@ -13,7 +13,7 @@ var rootCmd = &cobra.Command{
 
 var (
 	configPath  string
-	metricsPort string
+	metricsPath string
 )
 
 // Execute executes the root command.
@@ -26,5 +26,5 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "/etc/pool-agent/config.toml", "config file path")
-	rootCmd.PersistentFlags().StringVar(&metricsPort, "metrics", "9101", "metrics port")
+	rootCmd.PersistentFlags().StringVar(&metricsPath, "metrics", "/var/lib/node_exporter/textfile_collector/pool_agent.prom", "metrics file path")
 }

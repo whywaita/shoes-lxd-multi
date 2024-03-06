@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -10,8 +10,8 @@ import (
 	"github.com/lxc/lxd/shared/api"
 )
 
-func (a *Agent) createInstance(name string, rt ResourceTypesMap) error {
-	log.Printf("Creating instance %q...", name)
+func (a *Agent) createInstance(name string, rt ResourceTypesMap, l *slog.Logger) error {
+	l.Info("Creating instance")
 	op, err := a.Client.CreateInstance(api.InstancesPost{
 		Name: name,
 		InstancePut: api.InstancePut{
@@ -45,7 +45,7 @@ func (a *Agent) createInstance(name string, rt ResourceTypesMap) error {
 		return fmt.Errorf("create operation: %w", err)
 	}
 
-	log.Printf("Starting instance %q...", name)
+	l.Info("Starting instance")
 	op, err = a.Client.UpdateInstanceState(name, api.InstanceStatePut{
 		Action:  "start",
 		Timeout: -1,
@@ -57,7 +57,7 @@ func (a *Agent) createInstance(name string, rt ResourceTypesMap) error {
 		return fmt.Errorf("start operation: %w", err)
 	}
 
-	log.Printf("Waiting system bus in instance %q...", name)
+	l.Info("Waiting system bus in instance")
 	op, err = a.Client.ExecInstance(name, api.InstanceExecPost{
 		Command: []string{"bash", "-c", "until test -e /var/run/dbus/system_bus_socket; do sleep 0.5; done"},
 	}, nil)
@@ -68,7 +68,7 @@ func (a *Agent) createInstance(name string, rt ResourceTypesMap) error {
 		return fmt.Errorf("wait system bus operation: %w", err)
 	}
 
-	log.Printf("Waiting system running for instance %q...", name)
+	l.Info("Waiting system running for instance")
 	op, err = a.Client.ExecInstance(name, api.InstanceExecPost{
 		Command: []string{"systemctl", "is-system-running", "--wait"},
 	}, nil)
@@ -79,7 +79,7 @@ func (a *Agent) createInstance(name string, rt ResourceTypesMap) error {
 		return fmt.Errorf("wait system running operation: %w", err)
 	}
 
-	log.Printf("Disabling systemd service watchdogs in instance %q...", name)
+	l.Info("Disabling systemd service watchdogs in instance")
 	op, err = a.Client.ExecInstance(name, api.InstanceExecPost{
 		Command: []string{"systemctl", "service-watchdogs", "no"},
 	}, nil)
@@ -90,10 +90,10 @@ func (a *Agent) createInstance(name string, rt ResourceTypesMap) error {
 		return fmt.Errorf("disable systemd service watchdogs operation: %w", err)
 	}
 
-	log.Printf("Waiting for instance %q idle...", name)
+	l.Info("Waiting for instance idle")
 	time.Sleep(a.WaitIdleTime)
 
-	log.Printf("Freezing instance %q...", name)
+	l.Info("Freezing instance")
 	op, err = a.Client.UpdateInstanceState(name, api.InstanceStatePut{
 		Action:  "freeze",
 		Timeout: -1,
@@ -105,6 +105,6 @@ func (a *Agent) createInstance(name string, rt ResourceTypesMap) error {
 		return fmt.Errorf("freeze operation: %w", err)
 	}
 
-	log.Printf("Created instance %q successfully", name)
+	l.Info("Created instance successfully")
 	return nil
 }
