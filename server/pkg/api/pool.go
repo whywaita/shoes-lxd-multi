@@ -7,6 +7,7 @@ import (
 	"log"
 	"log/slog"
 	"math/rand"
+	"os"
 	"sort"
 	"strconv"
 	"sync"
@@ -184,7 +185,13 @@ func allocatePooledInstance(ctx context.Context, targets []lxdclient.LXDHost, re
 	for _, i := range s {
 		if err := allocateInstance(*i.Host, i.InstanceName, runnerName); err != nil {
 			log.Printf("failed to allocate instance %q in host %q (trying another instance): %+v", i.InstanceName, i.Host.HostConfig.LxdHost, err)
-			metric.FailedAllocateCount.WithLabelValues(i.Host.HostConfig.LxdHost, resourceType).Inc()
+			hostname, err := os.Hostname()
+			if err != nil {
+				log.Printf("failed to get hostname: %+v", err)
+				metric.FailedAllocateCount.WithLabelValues(i.Host.HostConfig.LxdHost, resourceType, "").Inc()
+				continue
+			}
+			metric.FailedAllocateCount.WithLabelValues(i.Host.HostConfig.LxdHost, resourceType, hostname).Inc()
 			continue
 		}
 		return i.Host, i.InstanceName, nil
