@@ -38,7 +38,7 @@ type Agent struct {
 }
 
 var (
-	ErrAlreadyStopped = errors.New("The instance is already stopped")
+	ErrAlreadyStopped = "The instance is already stopped"
 )
 
 type instances map[string]struct{}
@@ -213,6 +213,7 @@ func (a *Agent) checkInstances() error {
 		}
 	}
 
+	lxdInstances.Reset()
 	for _, i := range s {
 		l := slog.With("instance", i.Name)
 		lxdInstances.WithLabelValues(i.Name, i.Status, i.Config[configKeyResourceType]).Set(1)
@@ -222,9 +223,10 @@ func (a *Agent) checkInstances() error {
 		for _, rt := range toDelete {
 			if i.Config[configKeyResourceType] == rt {
 				l := l.With("flavor", rt)
-				l.Info("Deleting disabled flavor instances")
+				l.Info("Deleting disabled flavor instance")
 				if err := a.deleteInstance(i); err != nil {
 					l.Error("failed to delete instance", "err", err.Error())
+					continue
 				}
 				l.Info("Deleted disabled flavor instance")
 			}
@@ -299,21 +301,21 @@ func (a *Agent) deleteInstance(i api.Instance) error {
 	defer delete(a.deletingInstances, i.Name)
 	_, etag, err := a.Client.GetInstance(i.Name)
 	if err != nil {
-		return fmt.Errorf("get instance %q: %w", i.Name, err)
+		return fmt.Errorf("get instance: %w", err)
 	}
 	stopOp, err := a.Client.UpdateInstanceState(i.Name, api.InstanceStatePut{Action: "stop", Timeout: -1, Force: true}, etag)
-	if err != nil && !errors.Is(err, ErrAlreadyStopped) {
-		return fmt.Errorf("failed to stop instance %q: %+v", i.Name, err)
+	if err != nil && err.Error() != ErrAlreadyStopped {
+		return fmt.Errorf("Stop instance: %+v", err)
 	}
-	if err := stopOp.Wait(); err != nil && !errors.Is(err, ErrAlreadyStopped) {
-		return fmt.Errorf("failed to stop instance %q: %+v", i.Name, err)
+	if err := stopOp.Wait(); err != nil && err.Error() != ErrAlreadyStopped {
+		return fmt.Errorf("Stop instance operation: %+v", err)
 	}
 	deleteOp, err := a.Client.DeleteInstance(i.Name)
 	if err != nil {
-		return fmt.Errorf("delete instance %q: %w", i.Name, err)
+		return fmt.Errorf("Delete instance: %w", err)
 	}
 	if err := deleteOp.Wait(); err != nil {
-		return fmt.Errorf("delete instance %q operation: %w", i.Name, err)
+		return fmt.Errorf("Delete instance operation: %w", err)
 	}
 	return nil
 }
