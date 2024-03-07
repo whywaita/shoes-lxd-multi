@@ -92,11 +92,10 @@ func scrapeLXDHosts(ctx context.Context, hostConfigs []config.HostConfig, ch cha
 		go func(host lxdclient.LXDHost) {
 			defer wg.Done()
 
-			if err := scrapeLXDHost(host, ch); err != nil {
-				slog.With("host", host.HostConfig.LxdHost).Warn(
-					"failed to scrape LXD host",
-					"err", err.Error(),
-				)
+			l := slog.With("host", host.HostConfig.LxdHost)
+
+			if err := scrapeLXDHost(ctx, host, ch, l); err != nil {
+				l.Warn("failed to scrape LXD host", "err", err.Error())
 			}
 		}(host)
 	}
@@ -104,21 +103,16 @@ func scrapeLXDHosts(ctx context.Context, hostConfigs []config.HostConfig, ch cha
 	return nil
 }
 
-func scrapeLXDHost(host lxdclient.LXDHost, ch chan<- prometheus.Metric) error {
-	allCPU, allMemory, hostname, err := lxdclient.ScrapeLXDHostResources(host.Client)
+func scrapeLXDHost(ctx context.Context, host lxdclient.LXDHost, ch chan<- prometheus.Metric, logger *slog.Logger) error {
+	resources, instances, hostname, err := lxdclient.GetResourceFromLXDWithClient(ctx, host.Client, host.HostConfig.LxdHost, logger)
 	if err != nil {
-		return fmt.Errorf("failed to scrape lxd resources: %w", err)
+		return fmt.Errorf("failed to get resource from lxd: %w", err)
 	}
 
 	ch <- prometheus.MustNewConstMetric(
-		lxdHostMaxCPU, prometheus.GaugeValue, float64(allCPU), hostname)
+		lxdHostMaxCPU, prometheus.GaugeValue, float64(resources.CPUTotal), hostname)
 	ch <- prometheus.MustNewConstMetric(
-		lxdHostMaxMemory, prometheus.GaugeValue, float64(allMemory), hostname)
-
-	instances, err := lxdclient.GetAnyInstances(host.Client)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve list of instance (host: %s): %w", hostname, err)
-	}
+		lxdHostMaxMemory, prometheus.GaugeValue, float64(resources.MemoryTotal), hostname)
 
 	for _, instance := range instances {
 		memory, err := units.FromHumanSize(instance.Config["limits.memory"])
@@ -132,22 +126,16 @@ func scrapeLXDHost(host lxdclient.LXDHost, ch chan<- prometheus.Metric) error {
 		)
 	}
 
-	allocatedCPU, allocatedMemory, err := lxdclient.ScrapeLXDHostAllocatedResources(instances)
 	if err != nil {
 		return fmt.Errorf("failed to scrape instance info: %w", err)
 	}
 	ch <- prometheus.MustNewConstMetric(
-		lxdUsageCPU, prometheus.GaugeValue, float64(allocatedCPU), hostname)
+		lxdUsageCPU, prometheus.GaugeValue, float64(resources.CPUUsed), hostname)
 	ch <- prometheus.MustNewConstMetric(
-		lxdUsageMemory, prometheus.GaugeValue, float64(allocatedMemory), hostname)
+		lxdUsageMemory, prometheus.GaugeValue, float64(resources.MemoryUsed), hostname)
 
 	s := lxdclient.LXDStatus{
-		Resource: lxdclient.Resource{
-			CPUTotal:    allCPU,
-			MemoryTotal: allMemory,
-			CPUUsed:     allocatedCPU,
-			MemoryUsed:  allocatedMemory,
-		},
+		Resource:   *resources,
 		HostConfig: host.HostConfig,
 	}
 	if err := lxdclient.SetStatusCache(host.HostConfig.LxdHost, s); err != nil {

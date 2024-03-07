@@ -287,6 +287,8 @@ github.com/whywaita/myshoes v1.14.0 h1:wIJoInogzSErsdVEwiKjWJuqXzg0mKpxxf5YKeaT3
 github.com/whywaita/myshoes v1.14.0/go.mod h1:Fea/XeUlwjWSZdqfG/Ub3+U278kGilIG9o9f6DxRpq8=
 github.com/whywaita/shoes-lxd-multi/proto.go v0.0.0-20230331051154-d763b94b0dd7 h1:MdNKtHc/T+46wn7JfEi5P72Q/GHVPHLInqLldZB4eWE=
 github.com/whywaita/shoes-lxd-multi/proto.go v0.0.0-20230331051154-d763b94b0dd7/go.mod h1:2Z9+TYX1eQMUrCOnFBG71JaVcq5D8enmYJH6rnCWW88=
+github.com/whywaita/xsemaphore v0.0.0-20240305080042-cf6ba671d2e7 h1:1dG8mw/qyLMKtzfkdQnsZABm07YXxOfPI+2GRIXileo=
+github.com/whywaita/xsemaphore v0.0.0-20240305080042-cf6ba671d2e7/go.mod h1:DxG5uRIYgWQPhHggrUwSxLdCzhmKD91mUZYxq/det6o=
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.32/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
@@ -388,8 +390,8 @@ golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e/go.mod h1:RxMgew5VJxzue5/jJ
 golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.0.0-20201207232520-09787c993a3a/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
-golang.org/x/sync v0.0.0-20210220032951-036812b2e83c h1:5KslGYwFpkhGh+Q16bwMP3cOontH8FOep7tGV86Y7SQ=
-golang.org/x/sync v0.0.0-20210220032951-036812b2e83c/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
+golang.org/x/sync v0.6.0 h1:5BMeUDZ7vkXGfEr1x9B4bRcTH4lpkTkpdh0T/J+qjbQ=
+golang.org/x/sync v0.6.0/go.mod h1:Czt+wKu1gCyEFDUtn0jG5QVvpJ6rzVqr5aXyt9drQfk=
 golang.org/x/sys v0.0.0-20180830151530-49385e6e1522/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
 golang.org/x/sys v0.0.0-20180905080454-ebe1bf3edb33/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
 golang.org/x/sys v0.0.0-20181116152217-5ac8a444bdc5/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
