@@ -216,7 +216,7 @@ func (a *Agent) checkInstances() error {
 	lxdInstances.Reset()
 	for _, i := range s {
 		l := slog.With("instance", i.Name)
-		lxdInstances.WithLabelValues(i.Name, i.Status, i.Config[configKeyResourceType]).Set(1)
+		lxdInstances.WithLabelValues(i.Status, i.Config[configKeyResourceType]).Inc()
 		if _, ok := a.ResourceTypesCounts[i.Config[configKeyResourceType]]; !ok {
 			toDelete = append(toDelete, i.Config[configKeyResourceType])
 		}
