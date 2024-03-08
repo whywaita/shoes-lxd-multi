@@ -139,17 +139,16 @@ func (s *ShoesLXDMultiServer) addInstanceCreateMode(ctx context.Context, targetL
 
 func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets []lxdclient.LXDHost, req *pb.AddInstanceRequest, _l *slog.Logger) (*lxdclient.LXDHost, string, error) {
 	host, instanceName, found := findInstanceByJob(ctx, targets, req.RunnerName, _l)
-	l := _l.With("stadium", host.HostConfig.LxdHost, "instance", instanceName)
 	if !found {
 		resourceTypeName := datastore.UnmarshalResourceTypePb(req.ResourceType).String()
 		retried := 0
 		for {
 			var err error
-			host, instanceName, err = allocatePooledInstance(ctx, targets, resourceTypeName, req.ImageAlias, s.overCommitPercent, req.RunnerName, l)
+			host, instanceName, err = allocatePooledInstance(ctx, targets, resourceTypeName, req.ImageAlias, s.overCommitPercent, req.RunnerName, _l)
 			if err != nil {
 				if retried < 10 {
 					retried++
-					l.Info("AddInstance failed allocating instance", "retrying", retried, "err", err.Error())
+					_l.Info("AddInstance failed allocating instance", "retrying", retried, "err", err.Error())
 					time.Sleep(1 * time.Second)
 					continue
 				} else {
@@ -159,6 +158,7 @@ func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets [
 			break
 		}
 	}
+	l := _l.With("stadium", host.HostConfig.LxdHost, "instance", instanceName)
 	l.Info("AddInstance for pool mode", "runnerName", instanceName)
 	client := host.Client
 
