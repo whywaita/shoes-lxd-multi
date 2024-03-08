@@ -11,6 +11,6 @@ var (
 			Subsystem: "",
 			Name:      "failed_lxd_allocate",
 		},
-		[]string{"stadium_name", "runner_name"},
+		[]string{"stadium", "runner_name"},
 	)
 )
