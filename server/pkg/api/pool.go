@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand"
-	"os"
 	"sort"
 	"strconv"
 	"sync"
@@ -16,7 +15,6 @@ import (
 	"github.com/lxc/lxd/shared/api"
 
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
-	"github.com/whywaita/shoes-lxd-multi/server/pkg/metric"
 )
 
 type gotInstances struct {
@@ -186,8 +184,6 @@ func allocatePooledInstance(ctx context.Context, targets []lxdclient.LXDHost, re
 		l := l.With("stadium", i.Host.HostConfig.LxdHost, "instance", i.InstanceName)
 		if err := allocateInstance(i.Host, i.InstanceName, runnerName, l); err != nil {
 			l.Info("failed to allocate instance (trying another instance)", "err", err)
-			hostname, _ := os.Hostname()
-			metric.FailedAllocateCount.WithLabelValues(i.Host.HostConfig.LxdHost, resourceType, hostname).Inc()
 			continue
 		}
 		return i.Host, i.InstanceName, nil
