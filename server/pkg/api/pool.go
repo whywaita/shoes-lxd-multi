@@ -183,12 +183,12 @@ func allocatePooledInstance(ctx context.Context, targets []lxdclient.LXDHost, re
 
 	for _, i := range s {
 		l := l.With("stadium", i.Host.HostConfig.LxdHost, "instance", i.InstanceName)
-		metric.FailedLxdAllocate.WithLabelValues(i.Host.HostConfig.LxdHost, runnerName).Set(0)
 		if err := allocateInstance(i.Host, i.InstanceName, runnerName, l); err != nil {
 			l.Info("failed to allocate instance (trying another instance)", "err", err)
 			metric.FailedLxdAllocate.WithLabelValues(i.Host.HostConfig.LxdHost, runnerName).Set(1)
 			continue
 		}
+		metric.FailedLxdAllocate.WithLabelValues(i.Host.HostConfig.LxdHost, runnerName).Set(0)
 		return i.Host, i.InstanceName, nil
 	}
 
