@@ -276,7 +276,7 @@ func (a *Agent) isZombieInstance(i api.Instance) bool {
 func (a *Agent) isOldImageInstance(i api.Instance) (bool, error) {
 	baseImage, ok := i.Config["volatile.base_image"]
 	if !ok {
-		return false, fmt.Errorf("Failed to get volatile.base_image")
+		return false, errors.New("Failed to get volatile.base_image")
 	}
 	if baseImage != a.currentImage.Hash {
 		if i.CreatedAt.Before(a.currentImage.CreatedAt) {
@@ -304,17 +304,17 @@ func (a *Agent) deleteInstance(i api.Instance) error {
 	}
 	stopOp, err := a.Client.UpdateInstanceState(i.Name, api.InstanceStatePut{Action: "stop", Timeout: -1, Force: true}, etag)
 	if err != nil && err.Error() != errAlreadyStopped {
-		return fmt.Errorf("Stop instance: %+v", err)
+		return fmt.Errorf("stop instance: %w", err)
 	}
 	if err := stopOp.Wait(); err != nil && err.Error() != errAlreadyStopped {
-		return fmt.Errorf("Stop instance operation: %+v", err)
+		return fmt.Errorf("stop instance operation: %w", err)
 	}
 	deleteOp, err := a.Client.DeleteInstance(i.Name)
 	if err != nil {
-		return fmt.Errorf("Delete instance: %w", err)
+		return fmt.Errorf("delete instance: %w", err)
 	}
 	if err := deleteOp.Wait(); err != nil {
-		return fmt.Errorf("Delete instance operation: %w", err)
+		return fmt.Errorf("delete instance operation: %w", err)
 	}
 	return nil
 }
