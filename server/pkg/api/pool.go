@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"log/slog"
 	"math/rand"
 	"os"
@@ -104,16 +103,17 @@ func findInstances(ctx context.Context, targets []lxdclient.LXDHost, match func(
 	wg := new(sync.WaitGroup)
 	wg.Add(len(targets))
 	for i, target := range targets {
+		l := l.With("host", target.HostConfig.LxdHost)
 		go func(i int, target lxdclient.LXDHost) {
 			defer wg.Done()
 
 			s, overCommitPercent, err := getInstancesWithTimeout(ctx, target, 10*time.Second, l)
 			if err != nil {
-				log.Printf("failed to find instance in host %q: %+v", target.HostConfig.LxdHost, err)
+				l.Info("failed to find instance", "err", err)
 				return
 			}
 			if limitOverCommit > 0 && overCommitPercent >= limitOverCommit {
-				log.Printf("host %q reached over commit limit: current=%d limit=%d", target.HostConfig.LxdHost, overCommitPercent, limitOverCommit)
+				l.Info("host reached over commit limit", "current", overCommitPercent, "limit", limitOverCommit)
 				return
 			}
 
@@ -183,14 +183,10 @@ func allocatePooledInstance(ctx context.Context, targets []lxdclient.LXDHost, re
 	}, limitOverCommit, l)
 
 	for _, i := range s {
-		if err := allocateInstance(*i.Host, i.InstanceName, runnerName); err != nil {
-			log.Printf("failed to allocate instance %q in host %q (trying another instance): %+v", i.InstanceName, i.Host.HostConfig.LxdHost, err)
-			hostname, err := os.Hostname()
-			if err != nil {
-				log.Printf("failed to get hostname: %+v", err)
-				metric.FailedAllocateCount.WithLabelValues(i.Host.HostConfig.LxdHost, resourceType, "").Inc()
-				continue
-			}
+		l := l.With("stadium", i.Host.HostConfig.LxdHost, "instance", i.InstanceName)
+		if err := allocateInstance(i.Host, i.InstanceName, runnerName, l); err != nil {
+			l.Info("failed to allocate instance (trying another instance)", "err", err)
+			hostname, _ := os.Hostname()
 			metric.FailedAllocateCount.WithLabelValues(i.Host.HostConfig.LxdHost, resourceType, hostname).Inc()
 			continue
 		}
@@ -200,7 +196,7 @@ func allocatePooledInstance(ctx context.Context, targets []lxdclient.LXDHost, re
 	return nil, "", fmt.Errorf("no available instance for resource_type=%q image_alias=%q", resourceType, imageAlias)
 }
 
-func allocateInstance(host lxdclient.LXDHost, instanceName, runnerName string) error {
+func allocateInstance(host *lxdclient.LXDHost, instanceName, runnerName string, l *slog.Logger) error {
 	i, etag, err := host.Client.GetInstance(instanceName)
 	if err != nil {
 		return fmt.Errorf("get instance: %w", err)
@@ -210,7 +206,7 @@ func allocateInstance(host lxdclient.LXDHost, instanceName, runnerName string) e
 		return fmt.Errorf("already allocated instance %q in host %q", instanceName, host.HostConfig.LxdHost)
 	}
 
-	log.Printf("Allocating %q to %q", instanceName, runnerName)
+	l.Info("Allocating instance to runner")
 
 	i.InstancePut.Config[lxdclient.ConfigKeyRunnerName] = runnerName
 	i.InstancePut.Config[lxdclient.ConfigKeyAllocatedAt] = time.Now().UTC().Format(time.RFC3339Nano)
