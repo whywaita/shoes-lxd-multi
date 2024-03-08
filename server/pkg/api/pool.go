@@ -188,7 +188,7 @@ func allocatePooledInstance(ctx context.Context, targets []lxdclient.LXDHost, re
 			metric.FailedLxdAllocate.WithLabelValues(i.Host.HostConfig.LxdHost, runnerName).Set(1)
 			continue
 		}
-		metric.FailedLxdAllocate.WithLabelValues(i.Host.HostConfig.LxdHost, runnerName).Set(0)
+		metric.FailedLxdAllocate.DeleteLabelValues(i.Host.HostConfig.LxdHost, runnerName)
 		return i.Host, i.InstanceName, nil
 	}
 
