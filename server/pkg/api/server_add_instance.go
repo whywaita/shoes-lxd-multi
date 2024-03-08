@@ -63,7 +63,7 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 		return nil, status.Errorf(codes.Internal, "failed to retrieve instance information: %+v", err)
 	}
 
-	l.Info("Success AddInstance", "host", host.HostConfig.LxdHost, "runnerName", i.Name)
+	l.Info("Success AddInstance", "stadium", host.HostConfig.LxdHost)
 
 	return &pb.AddInstanceResponse{
 		CloudId:      i.Name,
@@ -137,8 +137,9 @@ func (s *ShoesLXDMultiServer) addInstanceCreateMode(ctx context.Context, targetL
 	return host, instanceName, nil
 }
 
-func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets []lxdclient.LXDHost, req *pb.AddInstanceRequest, l *slog.Logger) (*lxdclient.LXDHost, string, error) {
-	host, instanceName, found := findInstanceByJob(ctx, targets, req.RunnerName, l)
+func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets []lxdclient.LXDHost, req *pb.AddInstanceRequest, _l *slog.Logger) (*lxdclient.LXDHost, string, error) {
+	host, instanceName, found := findInstanceByJob(ctx, targets, req.RunnerName, _l)
+	l := _l.With("stadium", host.HostConfig.LxdHost, "instance", instanceName)
 	if !found {
 		resourceTypeName := datastore.UnmarshalResourceTypePb(req.ResourceType).String()
 		retried := 0
@@ -158,7 +159,7 @@ func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets [
 			break
 		}
 	}
-	l.Info("AddInstance for pool mode", "runnerName", instanceName, "host", host.HostConfig.LxdHost)
+	l.Info("AddInstance for pool mode", "runnerName", instanceName)
 	client := host.Client
 
 	err := unfreezeInstance(client, instanceName)
@@ -306,7 +307,7 @@ func getResources(ctx context.Context, targetLXDHosts []lxdclient.LXDHost) ([]ta
 	for _, t := range targetLXDHosts {
 		t := t
 		eg.Go(func() error {
-			l := slog.With("host", t.HostConfig.LxdHost)
+			l := slog.With("stadium", t.HostConfig.LxdHost)
 			resources, err := lxdclient.GetResource(ctx, t.HostConfig, l)
 			if err != nil {
 				l.Warn("failed to get resource", "err", err.Error())
@@ -340,7 +341,7 @@ var (
 func schedule(targets []targetHost, limitOverCommit uint64) (*targetHost, error) {
 	var schedulableTargets []targetHost
 	for _, target := range targets {
-		l := slog.With("host", target.host.HostConfig.LxdHost)
+		l := slog.With("stadium", target.host.HostConfig.LxdHost)
 		if target.percentOverCommit < limitOverCommit {
 			schedulableTargets = append(schedulableTargets, target)
 		} else {
