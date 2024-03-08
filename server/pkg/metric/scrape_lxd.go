@@ -127,10 +127,6 @@ func scrapeLXDHost(ctx context.Context, host lxdclient.LXDHost, ch chan<- promet
 			instance.Name, hostname, instance.Status, instance.Config[lxdclient.ConfigKeyResourceType], instance.Config["limits.cpu"], strconv.FormatInt(memory, 10),
 		)
 	}
-
-	if err != nil {
-		return fmt.Errorf("failed to scrape instance info: %w", err)
-	}
 	ch <- prometheus.MustNewConstMetric(
 		lxdUsageCPU, prometheus.GaugeValue, float64(resources.CPUUsed), hostname)
 	ch <- prometheus.MustNewConstMetric(
