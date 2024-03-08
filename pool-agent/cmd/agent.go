@@ -38,7 +38,7 @@ type Agent struct {
 }
 
 var (
-	ErrAlreadyStopped = "The instance is already stopped"
+	errAlreadyStopped = "The instance is already stopped"
 )
 
 type instances map[string]struct{}
@@ -284,11 +284,10 @@ func (a *Agent) isOldImageInstance(i api.Instance) (bool, error) {
 				return true, nil
 			}
 			return false, nil
-		} else {
-			a.currentImage.Hash = baseImage
-			a.currentImage.CreatedAt = i.CreatedAt
-			return false, nil
 		}
+		a.currentImage.Hash = baseImage
+		a.currentImage.CreatedAt = i.CreatedAt
+		return false, nil
 	}
 	return false, nil
 }
@@ -304,10 +303,10 @@ func (a *Agent) deleteInstance(i api.Instance) error {
 		return fmt.Errorf("get instance: %w", err)
 	}
 	stopOp, err := a.Client.UpdateInstanceState(i.Name, api.InstanceStatePut{Action: "stop", Timeout: -1, Force: true}, etag)
-	if err != nil && err.Error() != ErrAlreadyStopped {
+	if err != nil && err.Error() != errAlreadyStopped {
 		return fmt.Errorf("Stop instance: %+v", err)
 	}
-	if err := stopOp.Wait(); err != nil && err.Error() != ErrAlreadyStopped {
+	if err := stopOp.Wait(); err != nil && err.Error() != errAlreadyStopped {
 		return fmt.Errorf("Stop instance operation: %+v", err)
 	}
 	deleteOp, err := a.Client.DeleteInstance(i.Name)

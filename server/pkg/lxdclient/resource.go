@@ -25,10 +25,14 @@ type Resource struct {
 }
 
 const (
+	// ConfigKeyResourceType is key of resource type
 	ConfigKeyResourceType = "user.myshoes_resource_type"
-	ConfigKeyImageAlias   = "user.myshoes_image_alias"
-	ConfigKeyRunnerName   = "user.myshoes_runner_name"
-	ConfigKeyAllocatedAt  = "user.myshoes_allocated_at"
+	// ConfigKeyImageAlias is key of image alias
+	ConfigKeyImageAlias = "user.myshoes_image_alias"
+	// ConfigKeyRunnerName is key of runner name
+	ConfigKeyRunnerName = "user.myshoes_runner_name"
+	// ConfigKeyAllocatedAt is key of allocated at
+	ConfigKeyAllocatedAt = "user.myshoes_allocated_at"
 )
 
 // GetCPUOverCommitPercent calculate percent of over commit

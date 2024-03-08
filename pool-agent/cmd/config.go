@@ -10,14 +10,14 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-// ConfigMap is config map for pool agent.
+// Config is config map for pool agent.
 type Config struct {
 	ImageAlias          string              `toml:"image_alias"`
 	ResourceTypesMap    []ResourceTypesMap  `toml:"resource_types_map"`
 	ResourceTypesCounts ResourceTypesCounts `toml:"resource_types_counts"`
 }
 
-// ResourcesTypeMap is resource configuration for pool mode.
+// ResourceTypesMap is resource configuration for pool mode.
 type ResourceTypesMap struct {
 	Name string `toml:"name"`
 
