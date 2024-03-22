@@ -70,3 +70,18 @@ Use "pool-agent [command] --help" for more information about a command.
 - `LXD_MULTI_ZOMBIE_ALLOW_TIME`
     - Duration to delete zombie instances after instance created
     - default: `5m`
+
+```mermaid
+graph LR
+    subgraph myshoes-worker
+        A[myshoes]
+        B[shoes-lxd-multi-server]
+    end
+    subgraph myshoes-stadium
+        C[pool-agent]
+        D[LXD]
+    end
+    A -- Request runner --> B
+    C -- Create container pool --> D
+    B -- Request allocate pooled container --> D
+```
