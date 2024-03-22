@@ -33,6 +33,9 @@ Server-side implementation for shoes-lxd-multi
 - `LXD_MULTI_RESOURCE_CACHE_PERIOD_SEC`
     - Period of cache resource in seconds
     - default: `10`
+- `LXD_MULTI_MODE`
+    - Mode (`create` or `pool`)
+    - default: `create`
 
 ## Note
 LXD Server can't use `zfs` in storageclass if use `--privileged`. ref: https://discuss.linuxcontainers.org/t/docker-with-overlay-driver-in-lxd-cluster-not-working/9243
