@@ -131,7 +131,7 @@ func (a *Agent) Run(ctx context.Context, sigHupCh chan os.Signal) error {
 			slog.Info("Received SIGHUP. Reloading config...")
 			a.reloadConfig()
 		case <-ticker.C:
-			if err := a.checkInstances(); err != nil {
+			if err := a.adjustInstancePool(); err != nil {
 				slog.Error("failed to check instances", "err", err.Error())
 			}
 			if err := prometheus.WriteToTextfile(metricsPath, a.registry); err != nil {
@@ -173,7 +173,9 @@ func generateInstanceName() (string, error) {
 	return fmt.Sprintf("myshoes-runner-%x", b), nil
 }
 
-func (a *Agent) checkInstances() error {
+// adjustInstancePool adjusts the instance pool.
+// It creates or deletes instances according to the configuration.
+func (a *Agent) adjustInstancePool() error {
 	s, err := a.Client.GetInstances(api.InstanceTypeAny)
 	if err != nil {
 		return fmt.Errorf("get instances: %w", err)
