@@ -100,8 +100,8 @@ func findInstances(ctx context.Context, targets []lxdclient.LXDHost, match func(
 	rs := make([]result, len(targets))
 
 	wg := new(sync.WaitGroup)
-	wg.Add(len(targets))
 	for i, target := range targets {
+		wg.Add(1)
 		l := l.With("host", target.HostConfig.LxdHost)
 		go func(i int, target lxdclient.LXDHost) {
 			defer wg.Done()
