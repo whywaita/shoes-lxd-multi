@@ -46,7 +46,7 @@ type instances map[string]struct{}
 func newAgent(ctx context.Context) (*Agent, error) {
 	conf, err := LoadConfig()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to load config")
+		return nil, fmt.Errorf("load config: %w", err)
 	}
 	source, err := slm.ParseAlias(conf.ImageAlias)
 	if err != nil {
@@ -54,11 +54,11 @@ func newAgent(ctx context.Context) (*Agent, error) {
 	}
 	c, err := lxd.ConnectLXDUnixWithContext(ctx, "", &lxd.ConnectionArgs{})
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to connect lxd")
+		return nil, fmt.Errorf("connect lxd: %w", err)
 	}
 	checkInterval, waitIdleTime, zombieAllowTime, err := LoadParams()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to load params")
+		return nil, fmt.Errorf("load params: %w", err)
 	}
 	creatingInstances := make(map[string]instances)
 	for _, rt := range conf.ResourceTypesMap {
