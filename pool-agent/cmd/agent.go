@@ -94,11 +94,10 @@ func newAgent(ctx context.Context) (*Agent, error) {
 	return agent, nil
 }
 
-func (a *Agent) reloadConfig() {
+func (a *Agent) reloadConfig() error {
 	conf, err := LoadConfig()
 	if err != nil {
-		slog.Error("failed to reloadconfig", "err", err.Error())
-		return
+		return fmt.Errorf("reload config: %w", err)
 	}
 
 	for k, v := range conf.ResourceTypesCounts {
@@ -108,14 +107,14 @@ func (a *Agent) reloadConfig() {
 	if conf.ImageAlias != a.ImageAlias {
 		source, err := slm.ParseAlias(conf.ImageAlias)
 		if err != nil {
-			slog.Error("parse image alias: %+v", "err", err.Error())
-			return
+			return fmt.Errorf("parse image alias: %w", err)
 		}
 		a.InstanceSource = *source
 		a.ImageAlias = conf.ImageAlias
 	}
 	a.ResourceTypesMap = conf.ResourceTypesMap
 	a.ResourceTypesCounts = conf.ResourceTypesCounts
+	return nil
 }
 
 // Run runs the agent.
