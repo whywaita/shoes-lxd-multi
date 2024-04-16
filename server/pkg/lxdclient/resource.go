@@ -24,6 +24,17 @@ type Resource struct {
 	MemoryUsed  uint64
 }
 
+const (
+	// ConfigKeyResourceType is key of resource type
+	ConfigKeyResourceType = "user.myshoes_resource_type"
+	// ConfigKeyImageAlias is key of image alias
+	ConfigKeyImageAlias = "user.myshoes_image_alias"
+	// ConfigKeyRunnerName is key of runner name
+	ConfigKeyRunnerName = "user.myshoes_runner_name"
+	// ConfigKeyAllocatedAt is key of allocated at
+	ConfigKeyAllocatedAt = "user.myshoes_allocated_at"
+)
+
 // GetCPUOverCommitPercent calculate percent of over commit
 func GetCPUOverCommitPercent(in Resource) uint64 {
 	return uint64(float64(in.CPUUsed) / float64(in.CPUTotal) * 100.0)
@@ -164,6 +175,9 @@ func ScrapeLXDHostAllocatedResources(instances []api.Instance) (uint64, uint64, 
 	var allocatedCPU uint64
 	var allocatedMemory uint64
 	for _, instance := range instances {
+		if instance.StatusCode == api.Frozen {
+			continue
+		}
 		instanceCPU := instance.Config["limits.cpu"]
 		if instanceCPU != "" {
 			cpu, err := strconv.Atoi(instance.Config["limits.cpu"])
