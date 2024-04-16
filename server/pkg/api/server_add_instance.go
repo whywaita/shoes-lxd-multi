@@ -38,7 +38,7 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	instanceName := req.RunnerName
 	l = l.With("runnerName", instanceName)
 
-	instanceSource, err := parseAlias(req.ImageAlias)
+	instanceSource, err := ParseAlias(req.ImageAlias)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to parse image alias: %+v", err)
 	}
@@ -278,8 +278,8 @@ func schedule(targets []targetHost, limitOverCommit uint64) (*targetHost, error)
 	return &schedulableTargets[rand.Intn(len(schedulableTargets))], nil
 }
 
-// parseAlias parse user input
-func parseAlias(input string) (*api.InstanceSource, error) {
+// ParseAlias parse user input
+func ParseAlias(input string) (*api.InstanceSource, error) {
 	if strings.EqualFold(input, "") {
 		// default value is ubuntu:bionic
 		return &api.InstanceSource{
