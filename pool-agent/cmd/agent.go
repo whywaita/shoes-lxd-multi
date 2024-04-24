@@ -11,8 +11,8 @@ import (
 	lxd "github.com/lxc/lxd/client"
 	"github.com/lxc/lxd/shared/api"
 	"github.com/pkg/errors"
-	slm "github.com/whywaita/shoes-lxd-multi/server/pkg/api"
 	"github.com/prometheus/client_golang/prometheus"
+	slm "github.com/whywaita/shoes-lxd-multi/server/pkg/api"
 )
 
 // Agent is an agent for pool mode.
@@ -123,6 +123,23 @@ func (a *Agent) Run(ctx context.Context, sigHupCh chan os.Signal) error {
 	defer ticker.Stop()
 
 	slog.Info("Started agent")
+	quit := make(chan struct{})
+
+	go func() {
+	L:
+		for {
+			select {
+			case <-ticker.C:
+				if err := prometheus.WriteToTextfile(metricsPath, a.registry); err != nil {
+					slog.Error("failed to write metrics: %+v", "err", err.Error())
+				}
+			case <-ctx.Done():
+				slog.Info("Stopping agent...")
+				break L
+			}
+		}
+		quit <- struct{}{}
+	}()
 
 	for {
 		select {
@@ -133,11 +150,7 @@ func (a *Agent) Run(ctx context.Context, sigHupCh chan os.Signal) error {
 			if err := a.adjustInstancePool(); err != nil {
 				slog.Error("failed to check instances", "err", err.Error())
 			}
-			if err := prometheus.WriteToTextfile(metricsPath, a.registry); err != nil {
-				slog.Error("failed to write metrics: %+v", "err", err.Error())
-			}
-		case <-ctx.Done():
-			slog.Info("Stopping agent...")
+		case <-quit:
 			return nil
 		}
 	}
