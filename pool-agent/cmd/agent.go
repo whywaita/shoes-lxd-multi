@@ -261,6 +261,7 @@ func (a *Agent) CollectMetrics(ctx context.Context) error {
 			slog.Debug("Collecting metrics...")
 			if err := a.collectMetrics(); err != nil {
 				slog.Error("Failed to collect metrics", "err", err)
+				continue
 			}
 			if err := prometheus.WriteToTextfile(metricsPath, a.registry); err != nil {
 				slog.Error("Failed to write metrics", "err", err)
