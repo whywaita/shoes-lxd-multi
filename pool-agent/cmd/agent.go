@@ -23,7 +23,6 @@ type Agent struct {
 	ResourceTypesMap    []ResourceTypesMap
 	ResourceTypesCounts ResourceTypesCounts
 	Client              lxd.InstanceServer
-	MetricsClient       lxd.InstanceServer
 
 	CheckInterval   time.Duration
 	WaitIdleTime    time.Duration
@@ -57,10 +56,6 @@ func newAgent(ctx context.Context) (*Agent, error) {
 	if err != nil {
 		return nil, fmt.Errorf("connect lxd: %w", err)
 	}
-	mc, err := lxd.ConnectLXDUnixWithContext(ctx, "", &lxd.ConnectionArgs{})
-	if err != nil {
-		return nil, fmt.Errorf("connect lxd: %w", err)
-	}
 	checkInterval, waitIdleTime, zombieAllowTime, err := LoadParams()
 	if err != nil {
 		return nil, fmt.Errorf("load params: %w", err)
@@ -83,7 +78,6 @@ func newAgent(ctx context.Context) (*Agent, error) {
 		ResourceTypesMap:    conf.ResourceTypesMap,
 		ResourceTypesCounts: conf.ResourceTypesCounts,
 		Client:              c,
-		MetricsClient:       mc,
 
 		CheckInterval:   checkInterval,
 		WaitIdleTime:    waitIdleTime,
@@ -276,7 +270,7 @@ func (a *Agent) CollectMetrics(ctx context.Context) error {
 }
 
 func (a *Agent) collectMetrics() error {
-	s, err := a.MetricsClient.GetInstances(api.InstanceTypeAny)
+	s, err := a.Client.GetInstances(api.InstanceTypeAny)
 	if err != nil {
 		return fmt.Errorf("get instances: %w", err)
 	}
