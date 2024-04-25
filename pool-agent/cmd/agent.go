@@ -11,8 +11,8 @@ import (
 	lxd "github.com/lxc/lxd/client"
 	"github.com/lxc/lxd/shared/api"
 	"github.com/pkg/errors"
-	slm "github.com/whywaita/shoes-lxd-multi/server/pkg/api"
 	"github.com/prometheus/client_golang/prometheus"
+	slm "github.com/whywaita/shoes-lxd-multi/server/pkg/api"
 )
 
 // Agent is an agent for pool mode.
@@ -118,27 +118,25 @@ func (a *Agent) reloadConfig() error {
 }
 
 // Run runs the agent.
+
 func (a *Agent) Run(ctx context.Context, sigHupCh chan os.Signal) error {
 	ticker := time.NewTicker(a.CheckInterval)
 	defer ticker.Stop()
-
 	slog.Info("Started agent")
-
 	for {
 		select {
 		case <-sigHupCh:
 			slog.Info("Received SIGHUP. Reloading config...")
-			a.reloadConfig()
-		case <-ticker.C:
-			if err := a.adjustInstancePool(); err != nil {
-				slog.Error("failed to check instances", "err", err.Error())
-			}
-			if err := prometheus.WriteToTextfile(metricsPath, a.registry); err != nil {
-				slog.Error("failed to write metrics: %+v", "err", err.Error())
+			if err := a.reloadConfig(); err != nil {
+				slog.Error("Failed to reload config", "err", err.Error())
 			}
 		case <-ctx.Done():
 			slog.Info("Stopping agent...")
 			return nil
+		case <-ticker.C:
+			if err := a.adjustInstancePool(); err != nil {
+				slog.Error("Failed to adjust instances", "err", err)
+			}
 		}
 	}
 }
@@ -214,10 +212,8 @@ func (a *Agent) adjustInstancePool() error {
 		}
 	}
 
-	lxdInstances.Reset()
 	for _, i := range s {
 		l := slog.With("instance", i.Name)
-		lxdInstances.WithLabelValues(i.Status, i.Config[configKeyResourceType]).Inc()
 		if _, ok := a.ResourceTypesCounts[i.Config[configKeyResourceType]]; !ok {
 			toDelete = append(toDelete, i.Config[configKeyResourceType])
 		}
@@ -250,6 +246,39 @@ func (a *Agent) adjustInstancePool() error {
 		}
 	}
 
+	return nil
+}
+
+func (a *Agent) CollectMetrics(ctx context.Context) error {
+	ticker := time.NewTicker(a.CheckInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			slog.Info("Stopping metrics collection...")
+			return nil
+		case <-ticker.C:
+			slog.Debug("Collecting metrics...")
+			if err := a.collectMetrics(); err != nil {
+				slog.Error("Failed to collect metrics", "err", err)
+				continue
+			}
+			if err := prometheus.WriteToTextfile(metricsPath, a.registry); err != nil {
+				slog.Error("Failed to write metrics", "err", err)
+			}
+		}
+	}
+}
+
+func (a *Agent) collectMetrics() error {
+	s, err := a.Client.GetInstances(api.InstanceTypeAny)
+	if err != nil {
+		return fmt.Errorf("get instances: %w", err)
+	}
+	lxdInstances.Reset()
+	for _, i := range s {
+		lxdInstances.WithLabelValues(i.Status, i.Config[configKeyResourceType]).Inc()
+	}
 	return nil
 }
 
