@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
 )
 
 func init() {
@@ -26,5 +28,20 @@ var agentRunCommand = &cobra.Command{
 			return err
 		}
 
-		return agent.Run(ctx, sigHupCh)
+		eg, egCtx := errgroup.WithContext(ctx)
+
+		eg.Go(func() error {
+			if err := agent.CollectMetrics(egCtx); err != nil {
+				return fmt.Errorf("collect metrics: %w", err)
+			}
+			return nil
+		})
+
+		eg.Go(func() error {
+			if err := agent.Run(egCtx, sigHupCh); err != nil {
+				return fmt.Errorf("run agent: %w", err)
+			}
+			return nil
+		})
+		return eg.Wait()
 	}}
