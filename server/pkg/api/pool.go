@@ -231,14 +231,9 @@ func allocateInstance(host *lxdclient.LXDHost, instanceName, runnerName string, 
 }
 
 func recoverInvalidInstance(c lxd.InstanceServer, instanceName string) error {
-	i, etag, err := c.GetInstance(instanceName)
+	op, err := c.DeleteInstance(instanceName)
 	if err != nil {
-		return fmt.Errorf("get instance: %w", err)
-	}
-	i.InstancePut.Config[lxdclient.ConfigKeyRunnerName] = ""
-	op, err := c.UpdateInstance(instanceName, i.InstancePut, etag)
-	if err != nil {
-		return fmt.Errorf("update instance: %w", err)
+		return fmt.Errorf("delete instance: %w", err)
 	}
 	if err := op.Wait(); err != nil {
 		return fmt.Errorf("waiting operation: %w", err)
@@ -266,9 +261,6 @@ func unfreezeInstance(c lxd.InstanceServer, instanceName string) error {
 			return fmt.Errorf("waiting operation: %w", err)
 		}
 	default:
-		if err := recoverInvalidInstance(c, instanceName); err != nil {
-			return fmt.Errorf("failed to recover invalid instance: %w", err)
-		}
 		return fmt.Errorf("unexpected instance state: %s", state.StatusCode.String())
 	}
 	return nil
