@@ -164,7 +164,11 @@ func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets [
 
 	err := unfreezeInstance(client, instanceName)
 	if err != nil {
-		return nil, "", status.Errorf(codes.Internal, "failed to unfreeze instance: %+v", err)
+		l.Error("failed to unfreeze instance, will delete...")
+		if err := recoverInvalidInstance(client, instanceName); err != nil {
+			l.Error("failed to delete invalid instance", "error", err.Error())
+		}
+		return nil, "", status.Errorf(codes.Internal, "unfreeze instance: %+v", err)
 	}
 
 	scriptFilename := fmt.Sprintf("/tmp/myshoes_setup_script.%d", rand.Int())

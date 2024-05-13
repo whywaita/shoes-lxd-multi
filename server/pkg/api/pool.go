@@ -156,7 +156,7 @@ func findInstances(ctx context.Context, targets []lxdclient.LXDHost, match func(
 
 func findInstanceByJob(ctx context.Context, targets []lxdclient.LXDHost, runnerName string, l *slog.Logger) (*lxdclient.LXDHost, string, bool) {
 	s := findInstances(ctx, targets, func(i api.Instance) bool {
-		return i.Config[lxdclient.ConfigKeyRunnerName] == runnerName
+		return i.Config[lxdclient.ConfigKeyRunnerName] == runnerName && i.StatusCode == api.Frozen
 	}, 0, l)
 	if len(s) < 1 {
 		return nil, "", false
@@ -230,8 +230,19 @@ func allocateInstance(host *lxdclient.LXDHost, instanceName, runnerName string, 
 	return nil
 }
 
-func unfreezeInstance(c lxd.InstanceServer, name string) error {
-	state, etag, err := c.GetInstanceState(name)
+func recoverInvalidInstance(c lxd.InstanceServer, instanceName string) error {
+	op, err := c.DeleteInstance(instanceName)
+	if err != nil {
+		return fmt.Errorf("delete instance: %w", err)
+	}
+	if err := op.Wait(); err != nil {
+		return fmt.Errorf("waiting operation: %w", err)
+	}
+	return nil
+}
+
+func unfreezeInstance(c lxd.InstanceServer, instanceName string) error {
+	state, etag, err := c.GetInstanceState(instanceName)
 	if err != nil {
 		return fmt.Errorf("get instance state: %w", err)
 	}
@@ -239,7 +250,7 @@ func unfreezeInstance(c lxd.InstanceServer, name string) error {
 	case api.Running:
 		// do nothing
 	case api.Frozen:
-		op, err := c.UpdateInstanceState(name, api.InstanceStatePut{
+		op, err := c.UpdateInstanceState(instanceName, api.InstanceStatePut{
 			Action:  "unfreeze",
 			Timeout: -1,
 		}, etag)
