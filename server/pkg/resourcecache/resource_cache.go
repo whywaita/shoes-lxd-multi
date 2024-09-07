@@ -25,15 +25,16 @@ func RunLXDResourceCacheTicker(ctx context.Context, hcs []config.HostConfig, per
 }
 
 func reloadLXDHostResourceCache(ctx context.Context, hcs []config.HostConfig) error {
+	l := slog.With("method", "reloadLXDHostResourceCache")
 	hosts, _, err := lxdclient.ConnectLXDs(hcs)
 	if err != nil {
 		return fmt.Errorf("failed to connect LXD hosts: %s", err)
 	}
 
 	for _, host := range hosts {
-		l := slog.With("host", host.HostConfig.LxdHost)
-		if err := setLXDHostResourceCache(ctx, &host, l); err != nil {
-			l.Warn("failed to set lxd host resource cache", "err", err.Error())
+		_l := l.With("host", host.HostConfig.LxdHost)
+		if err := setLXDHostResourceCache(ctx, &host, _l); err != nil {
+			_l.Warn("failed to set lxd host resource cache", "err", err.Error())
 			continue
 		}
 	}

@@ -74,6 +74,7 @@ func (ScraperLXD) Scrape(ctx context.Context, hostConfigs []config.HostConfig, c
 }
 
 func scrapeLXDHosts(ctx context.Context, hostConfigs []config.HostConfig, ch chan<- prometheus.Metric) error {
+	l := slog.With("method", "scrapeLXDHosts")
 	hosts, errHosts, err := lxdclient.ConnectLXDs(hostConfigs)
 	if err != nil {
 		return fmt.Errorf("failed to connect LXD hosts: %w", err)
@@ -94,10 +95,10 @@ func scrapeLXDHosts(ctx context.Context, hostConfigs []config.HostConfig, ch cha
 		go func(host lxdclient.LXDHost) {
 			defer wg.Done()
 
-			l := slog.With("host", host.HostConfig.LxdHost)
+			_l := l.With("host", host.HostConfig.LxdHost)
 
-			if err := scrapeLXDHost(ctx, host, ch, l); err != nil {
-				l.Warn("failed to scrape LXD host", "err", err.Error())
+			if err := scrapeLXDHost(ctx, host, ch, _l); err != nil {
+				_l.Warn("failed to scrape LXD host", "err", err.Error())
 			}
 		}(host)
 	}
