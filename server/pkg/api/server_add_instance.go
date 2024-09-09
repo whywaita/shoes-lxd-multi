@@ -58,7 +58,7 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 			return nil, err
 		}
 	}
-	i, _, err := host.Client.GetInstance(instanceName)
+	i, _, err := host.Client.GetInstance(instanceName) // this line needs to assurance, So I will get instance information again from API
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to retrieve instance information: %+v", err)
 	}
@@ -87,11 +87,22 @@ func (s *ShoesLXDMultiServer) addInstanceCreateMode(ctx context.Context, targetL
 	}
 
 	if errors.Is(err, ErrInstanceIsNotFound) {
-		var reqInstance *api.InstancesPost
-		host, reqInstance, err = s.setLXDStatusCache(ctx, targetLXDHosts, instanceName, instanceSource, req)
+		host, err := s.scheduleHost(ctx, targetLXDHosts)
 		if err != nil {
-			return nil, "", status.Errorf(codes.Internal, "failed to set LXD status cache: %+v", err)
+			return nil, "", status.Errorf(codes.InvalidArgument, "failed to schedule host: %+v", err)
 		}
+		l := slog.With("host", host.HostConfig.LxdHost)
+		l.Info("AddInstance scheduled host", "runnerName", instanceName)
+
+		reqInstance := &api.InstancesPost{
+			InstancePut: api.InstancePut{
+				Config:  s.getInstanceConfig(req.SetupScript, req.ResourceType),
+				Devices: s.getInstanceDevices(),
+			},
+			Name:   instanceName,
+			Source: *instanceSource,
+		}
+
 		op, err := host.Client.CreateInstance(*reqInstance)
 		if err != nil {
 			return nil, "", status.Errorf(codes.Internal, "failed to create instance: %+v", err)
@@ -99,6 +110,14 @@ func (s *ShoesLXDMultiServer) addInstanceCreateMode(ctx context.Context, targetL
 		if err := op.Wait(); err != nil {
 			return nil, "", status.Errorf(codes.Internal, "failed to wait creating instance: %+v", err)
 		}
+		createdInstance, _, err := host.Client.GetInstance(instanceName)
+		if err != nil {
+			return nil, "", status.Errorf(codes.Internal, "failed to get created instance: %+v", err)
+		}
+		if err := s.setLXDStatusCache(reqInstance, *createdInstance, *host); err != nil {
+			return nil, "", status.Errorf(codes.Internal, "failed to set LXD status cache: %+v", err)
+		}
+
 	}
 	l = l.With("host", host.HostConfig.LxdHost)
 
@@ -203,51 +222,34 @@ func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets [
 }
 
 func (s *ShoesLXDMultiServer) setLXDStatusCache(
-	ctx context.Context,
-	targetLXDHosts []lxdclient.LXDHost,
-	instanceName string,
-	instanceSource *api.InstanceSource,
-	req *pb.AddInstanceRequest,
-) (*lxdclient.LXDHost, *api.InstancesPost, error) {
+	reqInstance *api.InstancesPost,
+	newInstance api.Instance,
+	scheduledHost lxdclient.LXDHost,
+) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	host, err := s.scheduleHost(ctx, targetLXDHosts)
-	if err != nil {
-		return nil, nil, status.Errorf(codes.InvalidArgument, "failed to schedule host: %+v", err)
-	}
-	l := slog.With("host", host.HostConfig.LxdHost)
-	l.Info("AddInstance scheduled host", "runnerName", instanceName)
-
-	reqInstance := &api.InstancesPost{
-		InstancePut: api.InstancePut{
-			Config:  s.getInstanceConfig(req.SetupScript, req.ResourceType),
-			Devices: s.getInstanceDevices(),
-		},
-		Name:   instanceName,
-		Source: *instanceSource,
-	}
-
 	cpu, err := strconv.ParseUint(reqInstance.InstancePut.Config["limits.cpu"], 10, 64)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failde to parse limits.cpu: %w", err)
+		return fmt.Errorf("failde to parse limits.cpu: %w", err)
 	}
 
 	memory, err := units.FromHumanSize(reqInstance.InstancePut.Config["limits.memory"])
 	if err != nil {
-		return nil, nil, fmt.Errorf("failde to parse limits.memory: %w", err)
+		return fmt.Errorf("failde to parse limits.memory: %w", err)
 	}
 
-	cache, err := lxdclient.GetStatusCache(host.HostConfig.LxdHost)
+	cache, err := lxdclient.GetStatusCache(scheduledHost.HostConfig.LxdHost)
 	if err != nil {
-		return nil, nil, err
+		return fmt.Errorf("failed to get status cache: %w", err)
 	}
 	cache.Resource.CPUUsed += cpu
 	cache.Resource.MemoryUsed += uint64(memory)
-	if err := lxdclient.SetStatusCache(host.HostConfig.LxdHost, cache); err != nil {
-		return nil, nil, fmt.Errorf("failed to set status cache: %s", err)
+	cache.Resource.Instances = append(cache.Resource.Instances, newInstance)
+	if err := lxdclient.SetStatusCache(scheduledHost.HostConfig.LxdHost, cache); err != nil {
+		return fmt.Errorf("failed to set status cache: %s", err)
 	}
-	return host, reqInstance, nil
+	return nil
 }
 
 func (s *ShoesLXDMultiServer) getInstanceConfig(setupScript string, rt myshoespb.ResourceType) map[string]string {

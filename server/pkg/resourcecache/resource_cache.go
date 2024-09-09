@@ -42,7 +42,7 @@ func reloadLXDHostResourceCache(ctx context.Context, hcs []config.HostConfig) er
 }
 
 func setLXDHostResourceCache(ctx context.Context, host *lxdclient.LXDHost, logger *slog.Logger) error {
-	resources, _, _, err := lxdclient.GetResourceFromLXDWithClient(ctx, host.Client, host.HostConfig.LxdHost, logger)
+	resources, _, err := lxdclient.GetResourceFromLXDWithClient(ctx, host.Client, host.HostConfig.LxdHost, logger)
 	if err != nil {
 		return fmt.Errorf("failed to get resource from lxd: %s", err)
 	}

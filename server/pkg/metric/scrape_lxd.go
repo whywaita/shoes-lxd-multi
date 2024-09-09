@@ -107,7 +107,7 @@ func scrapeLXDHosts(ctx context.Context, hostConfigs []config.HostConfig, ch cha
 }
 
 func scrapeLXDHost(ctx context.Context, host lxdclient.LXDHost, ch chan<- prometheus.Metric, logger *slog.Logger) error {
-	resources, instances, hostname, err := lxdclient.GetResourceFromLXDWithClient(ctx, host.Client, host.HostConfig.LxdHost, logger)
+	resources, hostname, err := lxdclient.GetResourceFromLXDWithClient(ctx, host.Client, host.HostConfig.LxdHost, logger)
 	if err != nil {
 		return fmt.Errorf("failed to get resource from lxd: %w", err)
 	}
@@ -117,7 +117,7 @@ func scrapeLXDHost(ctx context.Context, host lxdclient.LXDHost, ch chan<- promet
 	ch <- prometheus.MustNewConstMetric(
 		lxdHostMaxMemory, prometheus.GaugeValue, float64(resources.MemoryTotal), hostname)
 
-	for _, instance := range instances {
+	for _, instance := range resources.Instances {
 		memory, err := units.FromHumanSize(instance.Config["limits.memory"])
 		if err != nil {
 			return fmt.Errorf("failed to convert limits.memory: %w", err)
