@@ -87,12 +87,12 @@ func (s *ShoesLXDMultiServer) addInstanceCreateMode(ctx context.Context, targetL
 	}
 
 	if errors.Is(err, ErrInstanceIsNotFound) {
-		host, err := s.scheduleHost(ctx, targetLXDHosts)
+		scheduledHost, err := s.scheduleHost(ctx, targetLXDHosts)
 		if err != nil {
 			return nil, "", status.Errorf(codes.InvalidArgument, "failed to schedule host: %+v", err)
 		}
-		l := slog.With("host", host.HostConfig.LxdHost)
-		l.Info("AddInstance scheduled host", "runnerName", instanceName)
+		_l := slog.With("host", scheduledHost.HostConfig.LxdHost)
+		_l.Info("AddInstance scheduled host", "runnerName", instanceName)
 
 		reqInstance := &api.InstancesPost{
 			InstancePut: api.InstancePut{
@@ -103,21 +103,21 @@ func (s *ShoesLXDMultiServer) addInstanceCreateMode(ctx context.Context, targetL
 			Source: *instanceSource,
 		}
 
-		op, err := host.Client.CreateInstance(*reqInstance)
+		op, err := scheduledHost.Client.CreateInstance(*reqInstance)
 		if err != nil {
 			return nil, "", status.Errorf(codes.Internal, "failed to create instance: %+v", err)
 		}
 		if err := op.Wait(); err != nil {
 			return nil, "", status.Errorf(codes.Internal, "failed to wait creating instance: %+v", err)
 		}
-		createdInstance, _, err := host.Client.GetInstance(instanceName)
+		createdInstance, _, err := scheduledHost.Client.GetInstance(instanceName)
 		if err != nil {
 			return nil, "", status.Errorf(codes.Internal, "failed to get created instance: %+v", err)
 		}
-		if err := s.setLXDStatusCache(reqInstance, *createdInstance, *host); err != nil {
+		if err := s.setLXDStatusCache(reqInstance, *createdInstance, *scheduledHost); err != nil {
 			return nil, "", status.Errorf(codes.Internal, "failed to set LXD status cache: %+v", err)
 		}
-
+		host = scheduledHost
 	}
 	l = l.With("host", host.HostConfig.LxdHost)
 
