@@ -18,6 +18,8 @@ import (
 
 // Resource is resource of lxd host
 type Resource struct {
+	Instances []api.Instance
+
 	CPUTotal    uint64
 	MemoryTotal uint64
 	CPUUsed     uint64
@@ -53,7 +55,7 @@ func GetResource(ctx context.Context, hostConfig config.HostConfig, logger *slog
 
 	logger.Warn("failed to get status from cache, so scrape from lxd")
 
-	r, _, _, err := GetResourceFromLXD(ctx, hostConfig, logger)
+	r, _, err := GetResourceFromLXD(ctx, hostConfig, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resource from lxd: %w", err)
 	}
@@ -69,44 +71,45 @@ func GetResource(ctx context.Context, hostConfig config.HostConfig, logger *slog
 }
 
 // GetResourceFromLXD get resources from LXD API
-func GetResourceFromLXD(ctx context.Context, hostConfig config.HostConfig, logger *slog.Logger) (*Resource, []api.Instance, string, error) {
+func GetResourceFromLXD(ctx context.Context, hostConfig config.HostConfig, logger *slog.Logger) (*Resource, string, error) {
 	client, err := ConnectLXDWithTimeout(hostConfig.LxdHost, hostConfig.LxdClientCert, hostConfig.LxdClientKey)
 	if err != nil {
-		return nil, nil, "", fmt.Errorf("failed to connect lxd: %w", err)
+		return nil, "", fmt.Errorf("failed to connect lxd: %w", err)
 	}
 
 	return GetResourceFromLXDWithClient(ctx, *client, hostConfig.LxdHost, logger)
 }
 
 // GetResourceFromLXDWithClient get resources from LXD API with client
-func GetResourceFromLXDWithClient(ctx context.Context, client lxd.InstanceServer, host string, logger *slog.Logger) (*Resource, []api.Instance, string, error) {
+func GetResourceFromLXDWithClient(ctx context.Context, client lxd.InstanceServer, host string, logger *slog.Logger) (*Resource, string, error) {
 	sem := xsemaphore.Get(host, 1)
 	if err := sem.Acquire(ctx, 1); err != nil {
-		return nil, nil, "", fmt.Errorf("failed to acquire semaphore: %w", err)
+		return nil, "", fmt.Errorf("failed to acquire semaphore: %w", err)
 	}
 	defer sem.Release(1)
 
 	cpuTotal, memoryTotal, hostname, err := ScrapeLXDHostResources(client, host, logger)
 	if err != nil {
-		return nil, nil, "", fmt.Errorf("failed to scrape total resource: %w", err)
+		return nil, "", fmt.Errorf("failed to scrape total resource: %w", err)
 	}
 	instances, err := GetAnyInstances(client)
 	if err != nil {
-		return nil, nil, "", fmt.Errorf("failed to retrieve list of instance: %w", err)
+		return nil, "", fmt.Errorf("failed to retrieve list of instance: %w", err)
 	}
 	cpuUsed, memoryUsed, err := ScrapeLXDHostAllocatedResources(instances)
 	if err != nil {
-		return nil, nil, "", fmt.Errorf("failed to scrape allocated resource: %w", err)
+		return nil, "", fmt.Errorf("failed to scrape allocated resource: %w", err)
 	}
 
 	r := Resource{
+		Instances:   instances,
 		CPUTotal:    cpuTotal,
 		MemoryTotal: memoryTotal,
 		CPUUsed:     cpuUsed,
 		MemoryUsed:  memoryUsed,
 	}
 
-	return &r, instances, hostname, nil
+	return &r, hostname, nil
 }
 
 var (

@@ -30,15 +30,6 @@ func getInstancesWithTimeout(_ctx context.Context, h lxdclient.LXDHost, d time.D
 	defer cancel()
 	go func() {
 		defer close(ret)
-		s, err := lxdclient.GetAnyInstances(h.Client)
-		if err != nil {
-			ret <- &gotInstances{
-				Instances:         nil,
-				OverCommitPercent: 0,
-				Error:             fmt.Errorf("failed to get instances: %w", err),
-			}
-			return
-		}
 		r, err := lxdclient.GetResource(ctx, h.HostConfig, l)
 		if err != nil {
 			ret <- &gotInstances{
@@ -49,7 +40,7 @@ func getInstancesWithTimeout(_ctx context.Context, h lxdclient.LXDHost, d time.D
 			return
 		}
 		var used uint64
-		for _, i := range s {
+		for _, i := range r.Instances {
 			if i.StatusCode != api.Running {
 				continue
 			}
@@ -70,7 +61,7 @@ func getInstancesWithTimeout(_ctx context.Context, h lxdclient.LXDHost, d time.D
 		}
 		overCommitPercent := uint64(float64(used) / float64(r.CPUTotal) * 100)
 		ret <- &gotInstances{
-			Instances:         s,
+			Instances:         r.Instances,
 			OverCommitPercent: overCommitPercent,
 			Error:             nil,
 		}
