@@ -19,8 +19,6 @@ import (
 )
 
 func main() {
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
-
 	if err := run(); err != nil {
 		log.Fatal(err)
 	}
@@ -29,10 +27,15 @@ func main() {
 func run() error {
 	ctx := context.Background()
 
-	hostConfigs, mapping, periodSec, listenPort, overCommitPercent, poolMode, err := config.Load()
+	hostConfigs, mapping, periodSec, listenPort, overCommitPercent, poolMode, logLevel, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("failed to create server: %w", err)
 	}
+
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+		AddSource: true,
+		Level:     *logLevel,
+	})))
 
 	go serveMetrics(context.Background(), hostConfigs)
 
