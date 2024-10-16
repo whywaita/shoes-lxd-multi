@@ -68,6 +68,14 @@ func ConnectLXDs(hostConfigs []config.HostConfig) ([]LXDHost, []ErrLXDHost, erro
 		return nil, nil, fmt.Errorf("failed to connect LXD servers: %w", err)
 	}
 
+	// errHost needs to delete connected instance
+	for _, errHost := range errLXDHosts {
+		l := slog.With("host", errHost.HostConfig.LxdHost)
+		l.Warn("failed to connect LXD", "err", errHost.Err.Error())
+
+		deleteConnectedInstance(errHost.HostConfig.LxdHost)
+	}
+
 	return targetLXDHosts, errLXDHosts, nil
 }
 
@@ -138,4 +146,9 @@ func loadConnectedInstance(host string) (*lxd.InstanceServer, bool) {
 	i := v.(lxd.InstanceServer)
 
 	return &i, true
+}
+
+// deleteConnectedInstance delete connected instance
+func deleteConnectedInstance(host string) {
+	connectedInstances.Delete(host)
 }
