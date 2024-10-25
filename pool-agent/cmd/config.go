@@ -6,37 +6,42 @@ import (
 	"time"
 
 	"github.com/lxc/lxd/shared/api"
-	slm "github.com/whywaita/shoes-lxd-multi/server/pkg/api"
 	"github.com/pelletier/go-toml/v2"
+	slm "github.com/whywaita/shoes-lxd-multi/server/pkg/api"
 )
 
 // Config is config map for pool agent.
 type Config struct {
 	ImageAlias          string              `toml:"image_alias"`
-	ResourceTypesMap    []ResourceTypesMap  `toml:"resource_types_map"`
 	ResourceTypesCounts ResourceTypesCounts `toml:"resource_types_counts"`
 }
 
-// ResourceTypesMap is resource configuration for pool mode.
-type ResourceTypesMap struct {
-	Name string `toml:"name"`
+// ConfigPerVersion is config map for pool agent per version.
+type ConfigMap struct {
+	ResourceTypesMap ResourceTypesMap  `toml:"resource_types_map"`
+	Config           map[string]Config `toml:"config"`
+}
 
+type resourceType struct {
 	CPUCore int    `toml:"cpu"`
 	Memory  string `toml:"memory"`
 }
+
+// ResourceTypesMap is resource configuration for pool mode.
+type ResourceTypesMap map[string]resourceType
 
 // ResourceTypesCounts is counts for resouce types.
 type ResourceTypesCounts map[string]int
 
 // LoadConfig LoadConfig loads config from configPath
-func LoadConfig() (Config, error) {
+func LoadConfig() (ConfigMap, error) {
 	f, err := os.ReadFile(configPath)
 	if err != nil {
-		return Config{}, fmt.Errorf("failed read config file: %w", err)
+		return ConfigMap{}, fmt.Errorf("failed read config file: %w", err)
 	}
-	var s Config
+	var s ConfigMap
 	if err := toml.Unmarshal(f, &s); err != nil {
-		return Config{}, fmt.Errorf("parse config file: %w", err)
+		return ConfigMap{}, fmt.Errorf("parse config file: %w", err)
 	}
 	return s, nil
 }
