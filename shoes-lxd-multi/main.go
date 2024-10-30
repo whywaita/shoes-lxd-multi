@@ -23,8 +23,8 @@ const (
 	// EnvServerEndpoint is endpoint of server
 	EnvServerEndpoint = "LXD_MULTI_SERVER_ENDPOINT"
 
-	// EnvLXDImageAlias is alias in lxd
-	EnvLXDImageAlias = "LXD_MULTI_IMAGE_ALIAS"
+	// EnvOsVersion is image version in lxd
+	EnvOsVersion = "LXD_MULTI_OS_VERSION"
 )
 
 func main() {
@@ -57,29 +57,25 @@ type LXDMultiPlugin struct {
 	plugin.Plugin
 }
 
-func loadConfig() ([]string, string, string, error) {
+func loadConfig() ([]string, string, error) {
 	var targetHosts []string
 	envTargetHosts := os.Getenv(EnvTargetHosts)
+
 	if err := json.Unmarshal([]byte(envTargetHosts), &targetHosts); err != nil {
-		return nil, "", "", fmt.Errorf("failed to unmarshal JSON from %s: %w", envTargetHosts, err)
+		return nil, "", fmt.Errorf("failed to unmarshal JSON from %s: %w", envTargetHosts, err)
 	}
 
 	envServerEndpoint := os.Getenv(EnvServerEndpoint)
 	if envServerEndpoint == "" {
-		return nil, "", "", fmt.Errorf("must set %s", EnvServerEndpoint)
+		return nil, "", fmt.Errorf("must set %s", EnvServerEndpoint)
 	}
 
-	alias := os.Getenv(EnvLXDImageAlias)
-	if alias == "" {
-		alias = "ubuntu:bionic"
-	}
-
-	return targetHosts, envServerEndpoint, alias, nil
+	return targetHosts, envServerEndpoint, nil
 }
 
 // GRPCServer is implement gRPC Server.
 func (l *LXDMultiPlugin) GRPCServer(broker *plugin.GRPCBroker, s *grpc.Server) error {
-	targetHosts, serverEndpoint, imageAlias, err := loadConfig()
+	targetHosts, serverEndpoint, err := loadConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -92,7 +88,11 @@ func (l *LXDMultiPlugin) GRPCServer(broker *plugin.GRPCBroker, s *grpc.Server) e
 	if err != nil {
 		return fmt.Errorf("failed to dial to server: %w", err)
 	}
-	client := NewClient(targetHosts, grpcConn, imageAlias)
+	osVersion := os.Getenv(EnvOsVersion)
+	if osVersion == "" {
+		return fmt.Errorf("must set %s", EnvOsVersion)
+	}
+	client := NewClient(targetHosts, grpcConn, osVersion)
 	pb.RegisterShoesServer(s, client)
 	return nil
 
@@ -110,15 +110,15 @@ type Client struct {
 
 	targetHosts []string
 	conn        *grpc.ClientConn
-	imageAlias  string
+	osVersion   string
 }
 
 // NewClient create Client
-func NewClient(targetHosts []string, conn *grpc.ClientConn, imageAlias string) *Client {
+func NewClient(targetHosts []string, conn *grpc.ClientConn, osVersion string) *Client {
 	return &Client{
 		targetHosts: targetHosts,
 		conn:        conn,
-		imageAlias:  imageAlias,
+		osVersion:   osVersion,
 	}
 }
 
@@ -130,7 +130,7 @@ func (l Client) AddInstance(ctx context.Context, req *pb.AddInstanceRequest) (*p
 		SetupScript:  req.SetupScript,
 		ResourceType: req.ResourceType,
 		TargetHosts:  l.targetHosts,
-		ImageAlias:   l.imageAlias,
+		OsVersion:    l.osVersion,
 	}
 
 	slResp, err := slClient.AddInstance(ctx, slReq)
