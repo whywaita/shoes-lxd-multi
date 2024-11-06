@@ -10,10 +10,10 @@ import (
 	"github.com/lxc/lxd/shared/api"
 )
 
-func (a *Agent) createInstance(name string, rt ResourceTypesMap, l *slog.Logger) error {
+func (a *Agent) createInstance(iname, rtName string, rt resourceType, version string, l *slog.Logger) error {
 	l.Info("Creating instance")
 	op, err := a.Client.CreateInstance(api.InstancesPost{
-		Name: name,
+		Name: iname,
 		InstancePut: api.InstancePut{
 			Config: map[string]string{
 				"limits.cpu":          strconv.Itoa(rt.CPUCore),
@@ -25,8 +25,8 @@ func (a *Agent) createInstance(name string, rt ResourceTypesMap, l *slog.Logger)
 					"lxc.cgroup.devices.allow = a",
 					"lxc.cap.drop=",
 				}, "\n"),
-				configKeyImageAlias:   a.ImageAlias,
-				configKeyResourceType: rt.Name,
+				configKeyImageAlias:   a.Config[version].ImageAlias,
+				configKeyResourceType: rtName,
 			},
 			Devices: map[string]map[string]string{
 				"kmsg": {
@@ -36,7 +36,7 @@ func (a *Agent) createInstance(name string, rt ResourceTypesMap, l *slog.Logger)
 				},
 			},
 		},
-		Source: a.InstanceSource,
+		Source: a.Config[version].InstanceSource,
 	})
 	if err != nil {
 		return fmt.Errorf("create: %w", err)
@@ -46,7 +46,7 @@ func (a *Agent) createInstance(name string, rt ResourceTypesMap, l *slog.Logger)
 	}
 
 	l.Info("Starting instance")
-	op, err = a.Client.UpdateInstanceState(name, api.InstanceStatePut{
+	op, err = a.Client.UpdateInstanceState(iname, api.InstanceStatePut{
 		Action:  "start",
 		Timeout: -1,
 	}, "")
@@ -58,7 +58,7 @@ func (a *Agent) createInstance(name string, rt ResourceTypesMap, l *slog.Logger)
 	}
 
 	l.Info("Waiting system bus in instance")
-	op, err = a.Client.ExecInstance(name, api.InstanceExecPost{
+	op, err = a.Client.ExecInstance(iname, api.InstanceExecPost{
 		Command: []string{"bash", "-c", "until test -e /var/run/dbus/system_bus_socket; do sleep 0.5; done"},
 	}, nil)
 	if err != nil {
@@ -69,7 +69,7 @@ func (a *Agent) createInstance(name string, rt ResourceTypesMap, l *slog.Logger)
 	}
 
 	l.Info("Waiting system running for instance")
-	op, err = a.Client.ExecInstance(name, api.InstanceExecPost{
+	op, err = a.Client.ExecInstance(iname, api.InstanceExecPost{
 		Command: []string{"systemctl", "is-system-running", "--wait"},
 	}, nil)
 	if err != nil {
@@ -80,7 +80,7 @@ func (a *Agent) createInstance(name string, rt ResourceTypesMap, l *slog.Logger)
 	}
 
 	l.Info("Disabling systemd service watchdogs in instance")
-	op, err = a.Client.ExecInstance(name, api.InstanceExecPost{
+	op, err = a.Client.ExecInstance(iname, api.InstanceExecPost{
 		Command: []string{"systemctl", "service-watchdogs", "no"},
 	}, nil)
 	if err != nil {
@@ -94,7 +94,7 @@ func (a *Agent) createInstance(name string, rt ResourceTypesMap, l *slog.Logger)
 	time.Sleep(a.WaitIdleTime)
 
 	l.Info("Freezing instance")
-	op, err = a.Client.UpdateInstanceState(name, api.InstanceStatePut{
+	op, err = a.Client.UpdateInstanceState(iname, api.InstanceStatePut{
 		Action:  "freeze",
 		Timeout: -1,
 	}, "")
