@@ -76,7 +76,7 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 func (s *ShoesLXDMultiServer) addInstanceCreateMode(ctx context.Context, targetLXDHosts []lxdclient.LXDHost, req *pb.AddInstanceRequest, l *slog.Logger) (*lxdclient.LXDHost, string, error) {
 	instanceName := req.RunnerName
 
-	instanceSource, err := ParseAlias(req.ImageAlias)
+	instanceSource, err := ParseAlias(s.parseImageAliasMap(req.OsVersion))
 	if err != nil {
 		return nil, "", status.Errorf(codes.InvalidArgument, "failed to parse image alias: %+v", err)
 	}
@@ -163,7 +163,7 @@ func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets [
 		retried := 0
 		for {
 			var err error
-			host, instanceName, err = allocatePooledInstance(ctx, targets, resourceTypeName, req.ImageAlias, s.overCommitPercent, req.RunnerName, _l)
+			host, instanceName, err = allocatePooledInstance(ctx, targets, resourceTypeName, s.parseImageAliasMap(req.OsVersion), s.overCommitPercent, req.RunnerName, _l)
 			if err != nil {
 				if retried < 10 {
 					retried++
@@ -401,4 +401,14 @@ func ParseAlias(input string) (*api.InstanceSource, error) {
 		Type:  "image",
 		Alias: input,
 	}, nil
+}
+
+func (s *ShoesLXDMultiServer) parseImageAliasMap(version string) string {
+	if alias, ok := s.imageAliasMap[version]; ok {
+		if _, ok := s.imageAliasMap[alias]; ok {
+			return s.parseImageAliasMap(alias)
+		}
+		return alias
+	}
+	return ""
 }
