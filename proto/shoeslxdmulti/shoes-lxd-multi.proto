@@ -18,7 +18,8 @@ message AddInstanceRequest {
   repeated string labels = 6;
 
   repeated string target_hosts = 4;
-  string image_alias = 5;
+  string image_alias = 5 [deprecated = true];
+  string os_version = 7;
 }
 
 message AddInstanceResponse {
