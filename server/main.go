@@ -27,7 +27,7 @@ func main() {
 func run() error {
 	ctx := context.Background()
 
-	hostConfigs, mapping, periodSec, listenPort, overCommitPercent, poolMode, logLevel, err := config.Load()
+	hostConfigs, mapping, imageAliasMap, periodSec, listenPort, overCommitPercent, poolMode, logLevel, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("failed to create server: %w", err)
 	}
@@ -47,7 +47,7 @@ func run() error {
 	})
 	go resourcecache.RunLXDResourceCacheTicker(ctx, hcs, periodSec)
 
-	server, err := api.New(hostConfigs, mapping, overCommitPercent, poolMode)
+	server, err := api.New(hostConfigs, mapping, imageAliasMap, overCommitPercent, poolMode)
 	if err != nil {
 		return fmt.Errorf("failed to create server: %w", err)
 	}
