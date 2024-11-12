@@ -1,17 +1,18 @@
 module github.com/whywaita/shoes-lxd-multi/proto.go
 
-go 1.19
+go 1.23
+
+toolchain go1.23.2
 
 require (
-	github.com/whywaita/myshoes v1.14.0
-	google.golang.org/grpc v1.45.0
-	google.golang.org/protobuf v1.28.0
+	github.com/whywaita/myshoes v1.16.7
+	google.golang.org/grpc v1.68.0
+	google.golang.org/protobuf v1.35.1
 )
 
 require (
-	github.com/golang/protobuf v1.5.2 // indirect
-	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd // indirect
-	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad // indirect
-	golang.org/x/text v0.3.7 // indirect
-	google.golang.org/genproto v0.0.0-20200825200019-8632dd797987 // indirect
+	golang.org/x/net v0.31.0 // indirect
+	golang.org/x/sys v0.27.0 // indirect
+	golang.org/x/text v0.20.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20241104194629-dd2ea8efbc28 // indirect
 )
