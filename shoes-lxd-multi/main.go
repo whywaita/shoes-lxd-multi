@@ -80,9 +80,11 @@ func (l *LXDMultiPlugin) GRPCServer(broker *plugin.GRPCBroker, s *grpc.Server) e
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
+	//lint:ignore SA1019 Dial is marked as deprecated but support is continued ref: https://github.com/artefactual-sdps/enduro/pull/1011#issuecomment-2043632214
 	grpcConn, err := grpc.Dial(
 		serverEndpoint,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		//lint:ignore SA1019 Dial is marked as deprecated but support is continued ref: https://github.com/artefactual-sdps/enduro/pull/1011#issuecomment-2043632214
 		grpc.WithBlock(),
 	)
 	if err != nil {
