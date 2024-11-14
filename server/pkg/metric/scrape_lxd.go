@@ -8,12 +8,10 @@ import (
 	"sync"
 
 	"github.com/docker/go-units"
-
-	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
-
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/config"
+	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
 )
 
 const lxdName = "lxd"
@@ -120,7 +118,8 @@ func scrapeLXDHost(ctx context.Context, host lxdclient.LXDHost, ch chan<- promet
 	for _, instance := range resources.Instances {
 		memory, err := units.FromHumanSize(instance.Config["limits.memory"])
 		if err != nil {
-			return fmt.Errorf("failed to convert limits.memory: %w", err)
+			logger.Warn("failed to convert limits.memory", "err", err.Error(), "instance", instance.Name)
+			continue
 		}
 
 		ch <- prometheus.MustNewConstMetric(
