@@ -404,6 +404,9 @@ func ParseAlias(input string) (*api.InstanceSource, error) {
 }
 
 func (s *ShoesLXDMultiServer) parseImageAliasMap(version string) string {
+	if version == "" {
+		return s.parseImageAliasMap("default")
+	}
 	if alias, ok := s.imageAliasMap[version]; ok {
 		if _, ok := s.imageAliasMap[alias]; ok {
 			return s.parseImageAliasMap(alias)
