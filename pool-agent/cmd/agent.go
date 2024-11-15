@@ -61,9 +61,9 @@ func newAgent(ctx context.Context) (*Agent, error) {
 		s.Server = ""
 		creatingInstances := make(map[string]instances)
 		for k, v := range conf.ResourceTypesCounts {
-			configuredInstancesCount.WithLabelValues(k).Set(float64(v))
+			configuredInstancesCount.WithLabelValues(k, conf.ImageAlias).Set(float64(v))
 		}
-		for name, _ := range confmap.ResourceTypesMap {
+		for name := range confmap.ResourceTypesMap {
 			creatingInstances[name] = make(instances)
 		}
 		ac[version] = &AgentConfig{
@@ -186,7 +186,7 @@ func (a *Agent) adjustInstancePool() error {
 	}
 
 	toDelete := []string{}
-	for version, _ := range a.Config {
+	for version := range a.Config {
 		for rtName, rt := range a.ResourceTypesMap {
 			current := a.countPooledInstances(s, rtName, version)
 			creating := len(a.Config[version].creatingInstances[rtName])
@@ -287,7 +287,7 @@ func (a *Agent) collectMetrics() error {
 	}
 	lxdInstances.Reset()
 	for _, i := range s {
-		lxdInstances.WithLabelValues(i.Status, i.Config[configKeyResourceType]).Inc()
+		lxdInstances.WithLabelValues(i.Status, i.Config[configKeyResourceType], i.Config[configKeyImageAlias]).Inc()
 	}
 	return nil
 }
