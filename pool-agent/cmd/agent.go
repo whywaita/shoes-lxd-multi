@@ -213,6 +213,9 @@ func (a *Agent) adjustInstancePool() error {
 	}
 
 	for _, i := range s {
+		if i.Config[configKeyResourceType] == "" || i.Config[configKeyImageAlias] == "" || i.Config[configKeyRunnerName] == "" {
+			continue
+		}
 		l := slog.With("instance", i.Name)
 		if _, ok := a.ResourceTypesCounts[i.Config[configKeyResourceType]]; !ok {
 			toDelete = append(toDelete, i.Config[configKeyResourceType])
