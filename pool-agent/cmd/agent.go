@@ -51,7 +51,6 @@ func newAgent(ctx context.Context) (*Agent, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
-	fmt.Printf("config: %+v", confmap)
 	ac := make(map[string]*AgentConfig, len(confmap.Config))
 	for version, conf := range confmap.Config {
 		s, err := slm.ParseAlias(conf.ImageAlias)
