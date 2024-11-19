@@ -185,12 +185,12 @@ func (a *Agent) adjustInstancePool() error {
 		return fmt.Errorf("get instances: %w", err)
 	}
 
-	toDelete := []string{}
-	for version := range a.Config {
+	for version, config := range a.Config {
+		toDelete := []string{}
 		for rtName, rt := range a.ResourceTypesMap {
 			current := a.countPooledInstances(s, rtName, version)
-			creating := len(a.Config[version].creatingInstances[rtName])
-			rtCount, ok := a.Config[version].ResourceTypesCounts[rtName]
+			creating := len(config.creatingInstances[rtName])
+			rtCount, ok := config.ResourceTypesCounts[rtName]
 			if !ok {
 				toDelete = append(toDelete, rtName)
 				continue
@@ -209,9 +209,9 @@ func (a *Agent) adjustInstancePool() error {
 					return fmt.Errorf("generate instance name: %w", err)
 				}
 				l := slog.With("instance", iname, "flavor", rtName, "version", version)
-				a.Config[version].creatingInstances[rtName][iname] = struct{}{}
+				config.creatingInstances[rtName][iname] = struct{}{}
 
-				defer delete(a.Config[version].creatingInstances[rtName], iname)
+				defer delete(config.creatingInstances[rtName], iname)
 
 				if err := a.createInstance(iname, rtName, rt, version, l); err != nil {
 					l.Error("failed to create instance", "err", err.Error())
@@ -219,12 +219,14 @@ func (a *Agent) adjustInstancePool() error {
 			}
 		}
 		for _, i := range s {
-			if i.Config[configKeyResourceType] == "" || i.Config[configKeyImageAlias] == "" {
+			if i.Config[configKeyResourceType] == "" || i.Config[configKeyImageAlias] != config.ImageAlias {
 				continue
 			}
 			l := slog.With("instance", i.Name, "version", version)
-			if _, ok := a.Config[version].ResourceTypesCounts[i.Config[configKeyResourceType]]; !ok {
-				toDelete = append(toDelete, i.Config[configKeyResourceType])
+			if _, ok := config.ResourceTypesCounts[i.Config[configKeyResourceType]]; !ok {
+				if i.Config[configKeyImageAlias] == config.ImageAlias {
+					toDelete = append(toDelete, i.Config[configKeyResourceType])
+				}
 			}
 			for _, rt := range toDelete {
 				if i.Config[configKeyResourceType] == rt {
