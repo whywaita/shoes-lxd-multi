@@ -10,7 +10,6 @@ configuration file format is toml
 
 ```toml
 # sample configuration
-image_alias = "https://example.com/container-image"
 [[resource_types_map]]
 name = "large"
 cpu = 2
@@ -31,12 +30,22 @@ memory = "120GB"
 name = "4xlarge"
 cpu = 16
 memory = "160GB"
-[resource_types_counts]
-large = 10
-xlarge = 10
-2xlarge = 10
-3xlarge = 10
-4xlarge = 10
+[config.ubuntu2404]
+image_alias = "https://example.com/container-image-noble"
+[config.ubuntu2404.resource_types_counts]
+large = 1
+xlarge = 1
+2xlarge = 1
+3xlarge = 1
+4xlarge = 1
+[config.ubuntu2204]
+image_alias = "https://example.com/container-image-jammy"
+[config.ubuntu2204.resource_types_counts]
+large = 1
+xlarge = 1
+2xlarge = 1
+3xlarge = 1
+4xlarge = 1
 ```
 
 ### command line options
