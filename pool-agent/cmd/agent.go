@@ -113,7 +113,7 @@ func (a *Agent) reloadConfig() error {
 
 	for version, conf := range confmap.Config {
 		for k, v := range conf.ResourceTypesCounts {
-			configuredInstancesCount.WithLabelValues(k).Set(float64(v))
+			configuredInstancesCount.WithLabelValues(k, conf.ImageAlias).Set(float64(v))
 		}
 		a.Config[version].ImageAlias = conf.ImageAlias
 		a.Config[version].ImageAlias = conf.ImageAlias
