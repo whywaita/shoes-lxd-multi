@@ -46,6 +46,30 @@ var (
 
 type instances map[string]struct{}
 
+func genAgentConfig(config Config) *AgentConfig {
+	s, err := slm.ParseAlias(config.ImageAlias)
+	if err != nil {
+		return nil
+	}
+	s.Server = ""
+	creatingInstances := make(map[string]instances)
+	for k, v := range config.ResourceTypesCounts {
+		configuredInstancesCount.WithLabelValues(k, config.ImageAlias).Set(float64(v))
+		creatingInstances[k] = make(instances)
+	}
+	return &AgentConfig{
+		ImageAlias:          config.ImageAlias,
+		InstanceSource:      *s,
+		ResourceTypesCounts: config.ResourceTypesCounts,
+		currentImage: struct {
+			Hash      string
+			CreatedAt time.Time
+		}{Hash: "", CreatedAt: time.Time{}},
+		deletingInstances: make(instances),
+		creatingInstances: creatingInstances,
+	}
+}
+
 func newAgent(ctx context.Context) (*Agent, error) {
 	confmap, err := LoadConfig()
 	if err != nil {
@@ -53,32 +77,11 @@ func newAgent(ctx context.Context) (*Agent, error) {
 	}
 	ac := make(map[string]*AgentConfig, len(confmap.Config))
 	for version, conf := range confmap.Config {
-		s, err := slm.ParseAlias(conf.ImageAlias)
-		if err != nil {
-			return nil, err
+		agentConfig := genAgentConfig(conf)
+		if agentConfig == nil {
+			return nil, fmt.Errorf("failed to generate agent config")
 		}
-		s.Server = ""
-		creatingInstances := make(map[string]instances)
-		for k, v := range conf.ResourceTypesCounts {
-			configuredInstancesCount.WithLabelValues(k, conf.ImageAlias).Set(float64(v))
-		}
-		for name := range confmap.ResourceTypesMap {
-			creatingInstances[name] = make(instances)
-		}
-		ac[version] = &AgentConfig{
-			ImageAlias:     conf.ImageAlias,
-			InstanceSource: *s,
-
-			ResourceTypesCounts: conf.ResourceTypesCounts,
-
-			currentImage: struct {
-				Hash      string
-				CreatedAt time.Time
-			}{Hash: "", CreatedAt: time.Time{}},
-
-			creatingInstances: creatingInstances,
-			deletingInstances: make(instances),
-		}
+		ac[version] = agentConfig
 	}
 	checkInterval, waitIdleTime, zombieAllowTime, err := LoadParams()
 	if err != nil {
@@ -115,9 +118,25 @@ func (a *Agent) reloadConfig() error {
 		for k, v := range conf.ResourceTypesCounts {
 			configuredInstancesCount.WithLabelValues(k, conf.ImageAlias).Set(float64(v))
 		}
-		a.Config[version].ImageAlias = conf.ImageAlias
-		a.Config[version].ImageAlias = conf.ImageAlias
-		a.Config[version].ResourceTypesCounts = conf.ResourceTypesCounts
+		if _, ok := a.Config[version]; !ok {
+			agentConfig := genAgentConfig(conf)
+			if agentConfig == nil {
+				return fmt.Errorf("failed to generate agent config")
+			}
+			a.Config[version] = agentConfig
+			continue
+		} else {
+			s, err := slm.ParseAlias(conf.ImageAlias)
+			if err != nil {
+				return err
+			}
+			s.Server = ""
+			a.Config[version] = &AgentConfig{
+				ImageAlias:          conf.ImageAlias,
+				InstanceSource:      *s,
+				ResourceTypesCounts: conf.ResourceTypesCounts,
+			}
+		}
 	}
 	a.ResourceTypesMap = confmap.ResourceTypesMap
 	return nil
