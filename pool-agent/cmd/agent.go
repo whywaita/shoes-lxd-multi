@@ -216,7 +216,7 @@ func (a *Agent) adjustInstancePool() error {
 	}
 
 	for _, i := range s {
-		if i.Config[configKeyResourceType] == "" || i.Config[configKeyImageAlias] == "" || i.Config[configKeyRunnerName] == "" {
+		if i.Config[configKeyResourceType] == "" || i.Config[configKeyImageAlias] == "" {
 			continue
 		}
 		l := slog.With("instance", i.Name)
