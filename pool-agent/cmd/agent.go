@@ -52,6 +52,8 @@ func newAgent(ctx context.Context) (*Agent, error) {
 	if err != nil {
 		return nil, err
 	}
+	source.Server = ""
+
 	c, err := lxd.ConnectLXDUnixWithContext(ctx, "", &lxd.ConnectionArgs{})
 	if err != nil {
 		return nil, fmt.Errorf("connect lxd: %w", err)
@@ -110,6 +112,7 @@ func (a *Agent) reloadConfig() error {
 			return fmt.Errorf("parse image alias: %w", err)
 		}
 		a.InstanceSource = *source
+		a.InstanceSource.Server = ""
 		a.ImageAlias = conf.ImageAlias
 	}
 	a.ResourceTypesMap = conf.ResourceTypesMap
@@ -213,7 +216,7 @@ func (a *Agent) adjustInstancePool() error {
 	}
 
 	for _, i := range s {
-		if i.Config[configKeyResourceType] == "" || i.Config[configKeyImageAlias] == "" || i.Config[configKeyRunnerName] == "" {
+		if i.Config[configKeyResourceType] == "" || i.Config[configKeyImageAlias] == "" {
 			continue
 		}
 		l := slog.With("instance", i.Name)
