@@ -15,18 +15,11 @@ import (
 	slm "github.com/whywaita/shoes-lxd-multi/server/pkg/api"
 )
 
-// Agent is an agent for pool mode.
-type Agent struct {
+type AgentConfig struct {
 	ImageAlias     string
 	InstanceSource api.InstanceSource
 
-	ResourceTypesMap    []ResourceTypesMap
 	ResourceTypesCounts ResourceTypesCounts
-	Client              lxd.InstanceServer
-
-	CheckInterval   time.Duration
-	WaitIdleTime    time.Duration
-	ZombieAllowTime time.Duration
 
 	creatingInstances map[string]instances
 	deletingInstances instances
@@ -34,7 +27,17 @@ type Agent struct {
 		Hash      string
 		CreatedAt time.Time
 	}
-	registry *prometheus.Registry
+}
+
+// Agent is an agent for pool mode.
+type Agent struct {
+	Config           map[string]*AgentConfig
+	CheckInterval    time.Duration
+	WaitIdleTime     time.Duration
+	ZombieAllowTime  time.Duration
+	registry         *prometheus.Registry
+	ResourceTypesMap ResourceTypesMap
+	Client           lxd.InstanceServer
 }
 
 var (
@@ -43,80 +46,99 @@ var (
 
 type instances map[string]struct{}
 
+func genAgentConfig(config Config) *AgentConfig {
+	s, err := slm.ParseAlias(config.ImageAlias)
+	if err != nil {
+		return nil
+	}
+	s.Server = ""
+	creatingInstances := make(map[string]instances)
+	for k, v := range config.ResourceTypesCounts {
+		configuredInstancesCount.WithLabelValues(k, config.ImageAlias).Set(float64(v))
+		creatingInstances[k] = make(instances)
+	}
+	return &AgentConfig{
+		ImageAlias:          config.ImageAlias,
+		InstanceSource:      *s,
+		ResourceTypesCounts: config.ResourceTypesCounts,
+		currentImage: struct {
+			Hash      string
+			CreatedAt time.Time
+		}{Hash: "", CreatedAt: time.Time{}},
+		deletingInstances: make(instances),
+		creatingInstances: creatingInstances,
+	}
+}
+
 func newAgent(ctx context.Context) (*Agent, error) {
-	conf, err := LoadConfig()
+	confmap, err := LoadConfig()
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
-	source, err := slm.ParseAlias(conf.ImageAlias)
-	if err != nil {
-		return nil, err
-	}
-	source.Server = ""
-
-	c, err := lxd.ConnectLXDUnixWithContext(ctx, "", &lxd.ConnectionArgs{})
-	if err != nil {
-		return nil, fmt.Errorf("connect lxd: %w", err)
+	ac := make(map[string]*AgentConfig, len(confmap.Config))
+	for version, conf := range confmap.Config {
+		agentConfig := genAgentConfig(conf)
+		if agentConfig == nil {
+			return nil, fmt.Errorf("failed to generate agent config")
+		}
+		ac[version] = agentConfig
 	}
 	checkInterval, waitIdleTime, zombieAllowTime, err := LoadParams()
 	if err != nil {
 		return nil, fmt.Errorf("load params: %w", err)
 	}
-	creatingInstances := make(map[string]instances)
-	for _, rt := range conf.ResourceTypesMap {
-		creatingInstances[rt.Name] = make(instances)
-	}
-
 	registry := prometheus.NewRegistry()
 	registry.Register(configuredInstancesCount)
 	registry.Register(lxdInstances)
-	for k, v := range conf.ResourceTypesCounts {
-		configuredInstancesCount.WithLabelValues(k).Set(float64(v))
+	c, err := lxd.ConnectLXDUnixWithContext(ctx, "", &lxd.ConnectionArgs{})
+	if err != nil {
+		return nil, fmt.Errorf("connect lxd: %w", err)
 	}
+
 	agent := &Agent{
-		ImageAlias:     conf.ImageAlias,
-		InstanceSource: *source,
-
-		ResourceTypesMap:    conf.ResourceTypesMap,
-		ResourceTypesCounts: conf.ResourceTypesCounts,
-		Client:              c,
-
-		CheckInterval:   checkInterval,
-		WaitIdleTime:    waitIdleTime,
-		ZombieAllowTime: zombieAllowTime,
-		currentImage: struct {
-			Hash      string
-			CreatedAt time.Time
-		}{Hash: "", CreatedAt: time.Time{}},
-
-		creatingInstances: creatingInstances,
-		deletingInstances: make(instances),
-		registry:          registry,
+		Config:           ac,
+		Client:           c,
+		CheckInterval:    checkInterval,
+		WaitIdleTime:     waitIdleTime,
+		ZombieAllowTime:  zombieAllowTime,
+		registry:         registry,
+		ResourceTypesMap: confmap.ResourceTypesMap,
 	}
+
 	return agent, nil
 }
 
 func (a *Agent) reloadConfig() error {
-	conf, err := LoadConfig()
+	confmap, err := LoadConfig()
 	if err != nil {
 		return fmt.Errorf("reload config: %w", err)
 	}
 
-	for k, v := range conf.ResourceTypesCounts {
-		configuredInstancesCount.WithLabelValues(k).Set(float64(v))
-	}
-
-	if conf.ImageAlias != a.ImageAlias {
-		source, err := slm.ParseAlias(conf.ImageAlias)
-		if err != nil {
-			return fmt.Errorf("parse image alias: %w", err)
+	for version, conf := range confmap.Config {
+		for k, v := range conf.ResourceTypesCounts {
+			configuredInstancesCount.WithLabelValues(k, conf.ImageAlias).Set(float64(v))
 		}
-		a.InstanceSource = *source
-		a.InstanceSource.Server = ""
-		a.ImageAlias = conf.ImageAlias
+		if _, ok := a.Config[version]; !ok {
+			agentConfig := genAgentConfig(conf)
+			if agentConfig == nil {
+				return fmt.Errorf("failed to generate agent config")
+			}
+			a.Config[version] = agentConfig
+			continue
+		} else {
+			s, err := slm.ParseAlias(conf.ImageAlias)
+			if err != nil {
+				return err
+			}
+			s.Server = ""
+			a.Config[version] = &AgentConfig{
+				ImageAlias:          conf.ImageAlias,
+				InstanceSource:      *s,
+				ResourceTypesCounts: conf.ResourceTypesCounts,
+			}
+		}
 	}
-	a.ResourceTypesMap = conf.ResourceTypesMap
-	a.ResourceTypesCounts = conf.ResourceTypesCounts
+	a.ResourceTypesMap = confmap.ResourceTypesMap
 	return nil
 }
 
@@ -144,16 +166,16 @@ func (a *Agent) Run(ctx context.Context, sigHupCh chan os.Signal) error {
 	}
 }
 
-func (a *Agent) countPooledInstances(instances []api.Instance, resourceTypeName string) int {
+func (a *Agent) countPooledInstances(instances []api.Instance, resourceTypeName, version string) int {
 	count := 0
 	for _, i := range instances {
 		if i.StatusCode != api.Frozen {
 			continue
 		}
-		if i.Config[configKeyImageAlias] != a.ImageAlias {
+		if i.Config[configKeyResourceType] != resourceTypeName {
 			continue
 		}
-		if i.Config[configKeyResourceType] != resourceTypeName {
+		if i.Config[configKeyImageAlias] != a.Config[version].ImageAlias {
 			continue
 		}
 		if _, ok := i.Config[configKeyRunnerName]; ok {
@@ -181,74 +203,76 @@ func (a *Agent) adjustInstancePool() error {
 		return fmt.Errorf("get instances: %w", err)
 	}
 
-	toDelete := []string{}
-
-	for _, rt := range a.ResourceTypesMap {
-		current := a.countPooledInstances(s, rt.Name)
-		creating := len(a.creatingInstances[rt.Name])
-		rtCount, ok := a.ResourceTypesCounts[rt.Name]
-		if !ok {
-			toDelete = append(toDelete, rt.Name)
-			continue
-		} else if rtCount == 0 {
-			toDelete = append(toDelete, rt.Name)
-			continue
-		}
-		createCount := rtCount - current - creating
-		if createCount < 1 {
-			continue
-		}
-		slog.Info("Create instances", "count", createCount, "flavor", rt.Name)
-		for i := 0; i < createCount; i++ {
-			name, err := generateInstanceName()
-			if err != nil {
-				return fmt.Errorf("generate instance name: %w", err)
+	for version, config := range a.Config {
+		toDelete := []string{}
+		for rtName, rt := range a.ResourceTypesMap {
+			current := a.countPooledInstances(s, rtName, version)
+			creating := len(config.creatingInstances[rtName])
+			rtCount, ok := config.ResourceTypesCounts[rtName]
+			if !ok {
+				toDelete = append(toDelete, rtName)
+				continue
+			} else if rtCount == 0 {
+				toDelete = append(toDelete, rtName)
+				continue
 			}
-			l := slog.With("instance", name, "flavor", rt.Name)
-			a.creatingInstances[rt.Name][name] = struct{}{}
-
-			defer delete(a.creatingInstances[rt.Name], name)
-
-			if err := a.createInstance(name, rt, l); err != nil {
-				l.Error("failed to create instance", "err", err.Error())
+			createCount := rtCount - current - creating
+			if createCount < 1 {
+				continue
 			}
-		}
-	}
-
-	for _, i := range s {
-		if i.Config[configKeyResourceType] == "" || i.Config[configKeyImageAlias] == "" {
-			continue
-		}
-		l := slog.With("instance", i.Name)
-		if _, ok := a.ResourceTypesCounts[i.Config[configKeyResourceType]]; !ok {
-			toDelete = append(toDelete, i.Config[configKeyResourceType])
-		}
-		for _, rt := range toDelete {
-			if i.Config[configKeyResourceType] == rt {
-				l := l.With("flavor", rt)
-				l.Info("Deleting disabled flavor instance")
-				if err := a.deleteInstance(i); err != nil {
-					l.Error("failed to delete instance", "err", err.Error())
-					continue
+			slog.Info("Create instances", "count", createCount, "flavor", rtName)
+			for i := 0; i < createCount; i++ {
+				iname, err := generateInstanceName()
+				if err != nil {
+					return fmt.Errorf("generate instance name: %w", err)
 				}
-				l.Info("Deleted disabled flavor instance")
+				l := slog.With("instance", iname, "flavor", rtName, "version", version)
+				config.creatingInstances[rtName][iname] = struct{}{}
+
+				defer delete(config.creatingInstances[rtName], iname)
+
+				if err := a.createInstance(iname, rtName, rt, version, l); err != nil {
+					l.Error("failed to create instance", "err", err.Error())
+				}
 			}
 		}
-		if a.isZombieInstance(i) {
-			l.Info("Deleting zombie instance")
-			if err := a.deleteInstance(i); err != nil {
-				l.Error("failed to delete zombie instance", "err", err.Error())
+		for _, i := range s {
+			if i.Config[configKeyResourceType] == "" || i.Config[configKeyImageAlias] != config.ImageAlias {
+				continue
 			}
-			l.Info("Deleted zombie instance")
-		}
-		if isOld, err := a.isOldImageInstance(i); err != nil {
-			l.Error("failed to check old image instance", "err", err.Error())
-		} else if isOld {
-			l.Info("Deleting old image instance")
-			if err := a.deleteInstance(i); err != nil {
-				l.Error("failed to delete old image instance", "err", err.Error())
+			l := slog.With("instance", i.Name, "version", version)
+			if _, ok := config.ResourceTypesCounts[i.Config[configKeyResourceType]]; !ok {
+				if i.Config[configKeyImageAlias] == config.ImageAlias {
+					toDelete = append(toDelete, i.Config[configKeyResourceType])
+				}
 			}
-			l.Info("Deleted old image instance")
+			for _, rt := range toDelete {
+				if i.Config[configKeyResourceType] == rt {
+					l := l.With("flavor", rt)
+					l.Info("Deleting disabled flavor instance")
+					if err := a.deleteInstance(i, version); err != nil {
+						l.Error("failed to delete instance", "err", err.Error())
+						continue
+					}
+					l.Info("Deleted disabled flavor instance")
+				}
+			}
+			if a.isZombieInstance(i, version) {
+				l.Info("Deleting zombie instance")
+				if err := a.deleteInstance(i, version); err != nil {
+					l.Error("failed to delete zombie instance", "err", err.Error())
+				}
+				l.Info("Deleted zombie instance")
+			}
+			if isOld, err := a.isOldImageInstance(i, version); err != nil {
+				l.Error("failed to check old image instance", "err", err.Error())
+			} else if isOld {
+				l.Info("Deleting old image instance")
+				if err := a.deleteInstance(i, version); err != nil {
+					l.Error("failed to delete old image instance", "err", err.Error())
+				}
+				l.Info("Deleted old image instance")
+			}
 		}
 	}
 
@@ -283,19 +307,19 @@ func (a *Agent) collectMetrics() error {
 	}
 	lxdInstances.Reset()
 	for _, i := range s {
-		lxdInstances.WithLabelValues(i.Status, i.Config[configKeyResourceType]).Inc()
+		lxdInstances.WithLabelValues(i.Status, i.Config[configKeyResourceType], i.Config[configKeyImageAlias]).Inc()
 	}
 	return nil
 }
 
-func (a *Agent) isZombieInstance(i api.Instance) bool {
+func (a *Agent) isZombieInstance(i api.Instance, version string) bool {
 	if i.StatusCode == api.Frozen {
 		return false
 	}
 	if _, ok := i.Config[configKeyRunnerName]; ok {
 		return false
 	}
-	if i.Config[configKeyImageAlias] != a.ImageAlias {
+	if i.Config[configKeyImageAlias] != a.Config[version].ImageAlias {
 		return false
 	}
 	if i.CreatedAt.Add(a.ZombieAllowTime).After(time.Now()) {
@@ -303,37 +327,40 @@ func (a *Agent) isZombieInstance(i api.Instance) bool {
 	}
 	if rt, ok := i.Config[configKeyResourceType]; !ok {
 		return false
-	} else if _, ok := a.creatingInstances[rt][i.Name]; ok {
+	} else if _, ok := a.Config[version].creatingInstances[rt][i.Name]; ok {
 		return false
 	}
 	return true
 }
 
-func (a *Agent) isOldImageInstance(i api.Instance) (bool, error) {
+func (a *Agent) isOldImageInstance(i api.Instance, version string) (bool, error) {
 	baseImage, ok := i.Config["volatile.base_image"]
 	if !ok {
 		return false, errors.New("Failed to get volatile.base_image")
 	}
-	if baseImage != a.currentImage.Hash {
-		if i.CreatedAt.Before(a.currentImage.CreatedAt) {
+	if i.Config[configKeyImageAlias] != a.Config[version].ImageAlias {
+		return false, nil
+	}
+	if baseImage != a.Config[version].currentImage.Hash {
+		if i.CreatedAt.Before(a.Config[version].currentImage.CreatedAt) {
 			if i.StatusCode == api.Frozen {
 				return true, nil
 			}
 			return false, nil
 		}
-		a.currentImage.Hash = baseImage
-		a.currentImage.CreatedAt = i.CreatedAt
+		a.Config[version].currentImage.Hash = baseImage
+		a.Config[version].currentImage.CreatedAt = i.CreatedAt
 		return false, nil
 	}
 	return false, nil
 }
 
-func (a *Agent) deleteInstance(i api.Instance) error {
-	if _, ok := a.deletingInstances[i.Name]; ok {
+func (a *Agent) deleteInstance(i api.Instance, version string) error {
+	if _, ok := a.Config[version].deletingInstances[i.Name]; ok {
 		return nil
 	}
-	a.deletingInstances[i.Name] = struct{}{}
-	defer delete(a.deletingInstances, i.Name)
+	a.Config[version].deletingInstances[i.Name] = struct{}{}
+	defer delete(a.Config[version].deletingInstances, i.Name)
 	_, etag, err := a.Client.GetInstance(i.Name)
 	if err != nil {
 		return fmt.Errorf("get instance: %w", err)

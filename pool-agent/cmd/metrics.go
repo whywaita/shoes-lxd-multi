@@ -12,7 +12,7 @@ var (
 			Subsystem: "configured",
 			Namespace: "pool_agent",
 		},
-		[]string{"flavor"},
+		[]string{"flavor", "image_alias"},
 	)
 	lxdInstances = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -21,6 +21,6 @@ var (
 			Subsystem: "lxd",
 			Namespace: "pool_agent",
 		},
-		[]string{"status", "flavor"},
+		[]string{"status", "flavor", "image_alias"},
 	)
 )
