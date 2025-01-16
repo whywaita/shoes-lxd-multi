@@ -27,32 +27,32 @@ func main() {
 func run() error {
 	ctx := context.Background()
 
-	hostConfigs, mapping, periodSec, listenPort, overCommitPercent, poolMode, logLevel, err := config.Load()
+	c, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("failed to create server: %w", err)
 	}
 
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
 		AddSource: true,
-		Level:     *logLevel,
+		Level:     c.LogLevel,
 	})))
 
-	go serveMetrics(context.Background(), hostConfigs)
+	go serveMetrics(context.Background(), &c.LxdHost)
 
 	// lxd resource cache
 	var hcs []config.HostConfig
-	hostConfigs.Range(func(key string, value config.HostConfig) bool {
+	c.LxdHost.Range(func(key string, value config.HostConfig) bool {
 		hcs = append(hcs, value)
 		return true
 	})
-	go resourcecache.RunLXDResourceCacheTicker(ctx, hcs, periodSec)
+	go resourcecache.RunLXDResourceCacheTicker(ctx, hcs, c.ResourceCachePeriodSec)
 
-	server, err := api.New(hostConfigs, mapping, overCommitPercent, poolMode)
+	server, err := api.New(&c.LxdHost, c.ResourceTypeMapping, c.OverCommitPercent, c.IsPoolMode)
 	if err != nil {
 		return fmt.Errorf("failed to create server: %w", err)
 	}
 
-	if err := server.Run(listenPort); err != nil {
+	if err := server.Run(c.Port); err != nil {
 		return fmt.Errorf("faied to run server: %w", err)
 	}
 

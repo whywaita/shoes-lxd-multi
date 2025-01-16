@@ -37,11 +37,22 @@ type Mapping struct {
 	Memory           string `json:"memory"`
 }
 
+// Config is config for host
+type Config struct {
+	LxdHost                HostConfigMap                      `json:"lxd_host"`
+	ResourceTypeMapping    map[myshoespb.ResourceType]Mapping `json:"resource_type_mapping"`
+	ResourceCachePeriodSec int64                              `json:"resource_cache_period_sec"`
+	Port                   int                                `json:"port"`
+	OverCommitPercent      uint64                             `json:"over_commit_percent"`
+	IsPoolMode             bool                               `json:"mode"`
+	LogLevel               slog.Level                         `json:"log_level"`
+}
+
 // Load load config from Environment values
-func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int64, int, uint64, bool, *slog.Level, error) {
+func Load() (*Config, error) {
 	hostConfigs, err := loadHostConfigs()
 	if err != nil {
-		return nil, nil, 0, -1, 0, false, nil, fmt.Errorf("failed to load host config: %w", err)
+		return nil, fmt.Errorf("failed to load host config: %w", err)
 	}
 
 	envMappingJSON := os.Getenv(EnvLXDResourceTypeMapping)
@@ -49,7 +60,7 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int64, int, uin
 	if envMappingJSON != "" {
 		m, err = readResourceTypeMapping(envMappingJSON)
 		if err != nil {
-			return nil, nil, 0, -1, 0, false, nil, fmt.Errorf("failed to read %s: %w", EnvLXDResourceTypeMapping, err)
+			return nil, fmt.Errorf("failed to read %s: %w", EnvLXDResourceTypeMapping, err)
 		}
 	}
 
@@ -60,7 +71,7 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int64, int, uin
 	} else {
 		periodSec, err = strconv.ParseInt(envPeriodSec, 10, 64)
 		if err != nil {
-			return nil, nil, 0, -1, 0, false, nil, fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
+			return nil, fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
 		}
 	}
 	log.Printf("periodSec: %d\n", periodSec)
@@ -72,7 +83,7 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int64, int, uin
 	} else {
 		port, err = strconv.Atoi(envPort)
 		if err != nil {
-			return nil, nil, 0, -1, 0, false, nil, fmt.Errorf("failed to parse %s, need to int: %w", EnvPort, err)
+			return nil, fmt.Errorf("failed to parse %s, need to int: %w", EnvPort, err)
 		}
 	}
 
@@ -83,7 +94,7 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int64, int, uin
 	} else {
 		overCommitPercent, err = strconv.ParseUint(envOCP, 10, 64)
 		if err != nil {
-			return nil, nil, 0, -1, 0, false, nil, fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
+			return nil, fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
 		}
 	}
 	log.Printf("overCommitPercent: %d\n", overCommitPercent)
@@ -95,7 +106,7 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int64, int, uin
 	case "pool":
 		poolMode = true
 	default:
-		return nil, nil, 0, -1, 0, false, nil, fmt.Errorf(`unknown mode %q (expected "create" or "pool")`, os.Getenv(EnvMode))
+		return nil, fmt.Errorf(`unknown mode %q (expected "create" or "pool")`, os.Getenv(EnvMode))
 	}
 
 	var inLogLevel string
@@ -104,10 +115,18 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int64, int, uin
 		inLogLevel = "INFO"
 	}
 	if err := level.UnmarshalText([]byte(inLogLevel)); err != nil {
-		return nil, nil, 0, -1, 0, false, nil, fmt.Errorf("failed to parse log level (%s): %w", inLogLevel, err)
+		return nil, fmt.Errorf("failed to parse log level (%s): %w", inLogLevel, err)
 	}
 
-	return hostConfigs, m, periodSec, port, overCommitPercent, poolMode, &level, nil
+	return &Config{
+		LxdHost:                *hostConfigs,
+		ResourceTypeMapping:    m,
+		ResourceCachePeriodSec: periodSec,
+		Port:                   port,
+		OverCommitPercent:      overCommitPercent,
+		IsPoolMode:             poolMode,
+		LogLevel:               level,
+	}, nil
 }
 
 func readResourceTypeMapping(env string) (map[myshoespb.ResourceType]Mapping, error) {
