@@ -131,11 +131,9 @@ func (a *Agent) reloadConfig() error {
 				return err
 			}
 			s.Server = ""
-			a.Config[version] = &AgentConfig{
-				ImageAlias:          conf.ImageAlias,
-				InstanceSource:      *s,
-				ResourceTypesCounts: conf.ResourceTypesCounts,
-			}
+			a.Config[version].ImageAlias = conf.ImageAlias
+			a.Config[version].InstanceSource = *s
+			a.Config[version].ResourceTypesCounts = conf.ResourceTypesCounts
 		}
 	}
 	a.ResourceTypesMap = confmap.ResourceTypesMap
