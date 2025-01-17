@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/whywaita/shoes-lxd-multi/server/pkg/resourcecache"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/config"
 )
@@ -29,15 +31,17 @@ type Collector struct {
 	metrics     Metrics
 	hostConfigs []config.HostConfig
 	scrapers    []Scraper
+	rc          resourcecache.ResourceCache
 }
 
 // NewCollector create a collector
-func NewCollector(ctx context.Context, hostConfigs []config.HostConfig) *Collector {
+func NewCollector(ctx context.Context, hostConfigs []config.HostConfig, rc resourcecache.ResourceCache) *Collector {
 	return &Collector{
 		ctx:         ctx,
 		metrics:     NewMetrics(),
 		hostConfigs: hostConfigs,
 		scrapers:    NewScrapers(),
+		rc:          rc,
 	}
 }
 
@@ -68,7 +72,7 @@ func (c *Collector) scrape(ctx context.Context, ch chan<- prometheus.Metric) {
 			defer wg.Done()
 			label := fmt.Sprintf("collect.%s", scraper.Name())
 			scrapeStartTime := time.Now()
-			if err := scraper.Scrape(ctx, c.hostConfigs, ch); err != nil {
+			if err := scraper.Scrape(ctx, c.hostConfigs, c.rc, ch); err != nil {
 				slog.Warn("failed to scrape metrics", "name", scraper.Name(), "err", err.Error())
 				c.metrics.ScrapeErrors.WithLabelValues(label).Inc()
 				c.metrics.Error.Set(1)
@@ -83,7 +87,7 @@ func (c *Collector) scrape(ctx context.Context, ch chan<- prometheus.Metric) {
 type Scraper interface {
 	Name() string
 	Help() string
-	Scrape(ctx context.Context, hostConfigs []config.HostConfig, ch chan<- prometheus.Metric) error
+	Scrape(ctx context.Context, hostConfigs []config.HostConfig, rc resourcecache.ResourceCache, ch chan<- prometheus.Metric) error
 }
 
 // NewScrapers return list of scraper

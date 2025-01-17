@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/whywaita/shoes-lxd-multi/server/pkg/resourcecache"
+
 	lxd "github.com/lxc/lxd/client"
 	"github.com/lxc/lxd/shared/api"
 
@@ -24,13 +26,13 @@ type gotInstances struct {
 	Error             error
 }
 
-func getInstancesWithTimeout(_ctx context.Context, h lxdclient.LXDHost, d time.Duration, l *slog.Logger) ([]api.Instance, uint64, error) {
+func getInstancesWithTimeout(_ctx context.Context, h lxdclient.LXDHost, d time.Duration, rc resourcecache.ResourceCache, l *slog.Logger) ([]api.Instance, uint64, error) {
 	ret := make(chan *gotInstances)
 	ctx, cancel := context.WithTimeout(_ctx, d)
 	defer cancel()
 	go func() {
 		defer close(ret)
-		r, err := lxdclient.GetResource(ctx, h.HostConfig, l)
+		r, err := lxdclient.GetResource(ctx, h.HostConfig, rc, l)
 		if err != nil {
 			ret <- &gotInstances{
 				Instances:         nil,
@@ -82,7 +84,7 @@ type instance struct {
 	InstanceName string
 }
 
-func findInstances(ctx context.Context, targets []lxdclient.LXDHost, match func(api.Instance) bool, limitOverCommit uint64, l *slog.Logger) []instance {
+func (s *ShoesLXDMultiServer) findInstances(ctx context.Context, targets []lxdclient.LXDHost, match func(api.Instance) bool, limitOverCommit uint64, l *slog.Logger) []instance {
 	type result struct {
 		host              *lxdclient.LXDHost
 		overCommitPercent uint64
@@ -97,7 +99,7 @@ func findInstances(ctx context.Context, targets []lxdclient.LXDHost, match func(
 		go func(i int, target lxdclient.LXDHost) {
 			defer wg.Done()
 
-			s, overCommitPercent, err := getInstancesWithTimeout(ctx, target, 10*time.Second, l)
+			s, overCommitPercent, err := getInstancesWithTimeout(ctx, target, 10*time.Second, s.resourceCache, l)
 			if err != nil {
 				l.Info("failed to find instance", "err", err)
 				return
@@ -145,18 +147,18 @@ func findInstances(ctx context.Context, targets []lxdclient.LXDHost, match func(
 	return instances
 }
 
-func findInstanceByJob(ctx context.Context, targets []lxdclient.LXDHost, runnerName string, l *slog.Logger) (*lxdclient.LXDHost, string, bool) {
-	s := findInstances(ctx, targets, func(i api.Instance) bool {
+func (s *ShoesLXDMultiServer) findInstanceByJob(ctx context.Context, targets []lxdclient.LXDHost, runnerName string, l *slog.Logger) (*lxdclient.LXDHost, string, bool) {
+	instances := s.findInstances(ctx, targets, func(i api.Instance) bool {
 		return i.Config[lxdclient.ConfigKeyRunnerName] == runnerName && i.StatusCode == api.Frozen
 	}, 0, l)
-	if len(s) < 1 {
+	if len(instances) < 1 {
 		return nil, "", false
 	}
-	return s[0].Host, s[0].InstanceName, true
+	return instances[0].Host, instances[0].InstanceName, true
 }
 
-func allocatePooledInstance(ctx context.Context, targets []lxdclient.LXDHost, resourceType, imageAlias string, limitOverCommit uint64, runnerName string, l *slog.Logger) (*lxdclient.LXDHost, string, error) {
-	s := findInstances(ctx, targets, func(i api.Instance) bool {
+func (s *ShoesLXDMultiServer) allocatePooledInstance(ctx context.Context, targets []lxdclient.LXDHost, resourceType, imageAlias string, limitOverCommit uint64, runnerName string, l *slog.Logger) (*lxdclient.LXDHost, string, error) {
+	instances := s.findInstances(ctx, targets, func(i api.Instance) bool {
 		if i.StatusCode != api.Frozen {
 			return false
 		}
@@ -172,7 +174,7 @@ func allocatePooledInstance(ctx context.Context, targets []lxdclient.LXDHost, re
 		return true
 	}, limitOverCommit, l)
 
-	for _, i := range s {
+	for _, i := range instances {
 		l := l.With("host", i.Host.HostConfig.LxdHost, "instance", i.InstanceName)
 		if err := allocateInstance(i.Host, i.InstanceName, runnerName, l); err != nil {
 			l.Info("failed to allocate instance (trying another instance)", "err", err)

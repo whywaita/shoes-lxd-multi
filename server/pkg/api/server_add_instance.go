@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/whywaita/shoes-lxd-multi/server/pkg/resourcecache"
+
 	myshoespb "github.com/whywaita/myshoes/api/proto.go"
 
 	"golang.org/x/sync/errgroup"
@@ -114,7 +116,7 @@ func (s *ShoesLXDMultiServer) addInstanceCreateMode(ctx context.Context, targetL
 		if err != nil {
 			return nil, "", status.Errorf(codes.Internal, "failed to get created instance: %+v", err)
 		}
-		if err := s.setLXDStatusCache(reqInstance, *createdInstance, *scheduledHost); err != nil {
+		if err := s.setLXDStatusCache(ctx, reqInstance, *createdInstance, *scheduledHost); err != nil {
 			return nil, "", status.Errorf(codes.Internal, "failed to set LXD status cache: %+v", err)
 		}
 		host = scheduledHost
@@ -157,13 +159,13 @@ func (s *ShoesLXDMultiServer) addInstanceCreateMode(ctx context.Context, targetL
 }
 
 func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets []lxdclient.LXDHost, req *pb.AddInstanceRequest, _l *slog.Logger) (*lxdclient.LXDHost, string, error) {
-	host, instanceName, found := findInstanceByJob(ctx, targets, req.RunnerName, _l)
+	host, instanceName, found := s.findInstanceByJob(ctx, targets, req.RunnerName, _l)
 	if !found {
 		resourceTypeName := datastore.UnmarshalResourceTypePb(req.ResourceType).String()
 		retried := 0
 		for {
 			var err error
-			host, instanceName, err = allocatePooledInstance(ctx, targets, resourceTypeName, req.ImageAlias, s.overCommitPercent, req.RunnerName, _l)
+			host, instanceName, err = s.allocatePooledInstance(ctx, targets, resourceTypeName, req.ImageAlias, s.overCommitPercent, req.RunnerName, _l)
 			if err != nil {
 				if retried < 10 {
 					retried++
@@ -222,12 +224,18 @@ func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets [
 }
 
 func (s *ShoesLXDMultiServer) setLXDStatusCache(
+	ctx context.Context,
 	reqInstance *api.InstancesPost,
 	newInstance api.Instance,
 	scheduledHost lxdclient.LXDHost,
 ) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if err := s.resourceCache.Lock(ctx, scheduledHost.HostConfig.LxdHost); err != nil {
+		return fmt.Errorf("failed to lock: %w", err)
+	}
+	defer s.resourceCache.Unlock(ctx, scheduledHost.HostConfig.LxdHost)
 
 	cpu, err := strconv.ParseUint(reqInstance.InstancePut.Config["limits.cpu"], 10, 64)
 	if err != nil {
@@ -239,14 +247,14 @@ func (s *ShoesLXDMultiServer) setLXDStatusCache(
 		return fmt.Errorf("failde to parse limits.memory: %w", err)
 	}
 
-	cache, err := lxdclient.GetStatusCache(scheduledHost.HostConfig.LxdHost)
+	cache, _, err := s.resourceCache.GetResourceCache(ctx, scheduledHost.HostConfig.LxdHost)
 	if err != nil {
 		return fmt.Errorf("failed to get status cache: %w", err)
 	}
-	cache.Resource.CPUUsed += cpu
-	cache.Resource.MemoryUsed += uint64(memory)
-	cache.Resource.Instances = append(cache.Resource.Instances, newInstance)
-	if err := lxdclient.SetStatusCache(scheduledHost.HostConfig.LxdHost, cache); err != nil {
+	cache.CPUUsed += cpu
+	cache.MemoryUsed += uint64(memory)
+	cache.Instances = append(cache.Instances, newInstance)
+	if err := s.resourceCache.SetResourceCache(ctx, scheduledHost.HostConfig.LxdHost, *cache, resourcecache.DefaultExpireDuration); err != nil {
 		return fmt.Errorf("failed to set status cache: %s", err)
 	}
 	return nil
@@ -277,7 +285,7 @@ func (s *ShoesLXDMultiServer) getInstanceDevices() map[string]map[string]string 
 		"kmsg": {
 			"path":   "/dev/kmsg",
 			"source": "/dev/kmsg",
-			"type":   "unix-char",
+			"type":   "unix-cha ./.r",
 		},
 	}
 
@@ -286,13 +294,13 @@ func (s *ShoesLXDMultiServer) getInstanceDevices() map[string]map[string]string 
 
 type targetHost struct {
 	host     lxdclient.LXDHost
-	resource lxdclient.Resource
+	resource resourcecache.Resource
 
 	percentOverCommit uint64
 }
 
 func (s *ShoesLXDMultiServer) scheduleHost(ctx context.Context, targetLXDHosts []lxdclient.LXDHost) (*lxdclient.LXDHost, error) {
-	targets, err := getResources(ctx, targetLXDHosts)
+	targets, err := s.getResources(ctx, targetLXDHosts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resources: %w", err)
 	}
@@ -304,7 +312,7 @@ func (s *ShoesLXDMultiServer) scheduleHost(ctx context.Context, targetLXDHosts [
 	return &(target.host), nil
 }
 
-func getResources(ctx context.Context, targetLXDHosts []lxdclient.LXDHost) ([]targetHost, error) {
+func (s *ShoesLXDMultiServer) getResources(ctx context.Context, targetLXDHosts []lxdclient.LXDHost) ([]targetHost, error) {
 	var targets []targetHost
 
 	eg := errgroup.Group{}
@@ -314,7 +322,7 @@ func getResources(ctx context.Context, targetLXDHosts []lxdclient.LXDHost) ([]ta
 		t := t
 		eg.Go(func() error {
 			l := slog.With("host", t.HostConfig.LxdHost)
-			resources, err := lxdclient.GetResource(ctx, t.HostConfig, l)
+			resources, err := lxdclient.GetResource(ctx, t.HostConfig, s.resourceCache, l)
 			if err != nil {
 				l.Warn("failed to get resource", "err", err.Error())
 				return nil

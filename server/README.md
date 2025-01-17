@@ -39,6 +39,12 @@ Server-side implementation for shoes-lxd-multi
 - `LXD_MULTI_LOG_LEVEL`
     - Log level (`debug`, `info`, `warn`, `error`, `fatal`, `panic`) will set to `log/slog.Level`
     - default: `info`
+- `LXD_MULTI_CLUSTER_ENABLE`
+    - Enable cluster mode
+    - default: `false`
+- `LXD_MULTI_CLUSTER_REDIS_HOSTS`
+    - Redis host, (comma separated)
+    - default: `localhost:6379`
 
 ## Note
 LXD Server can't use `zfs` in storageclass if use `--privileged`. ref: https://discuss.linuxcontainers.org/t/docker-with-overlay-driver-in-lxd-cluster-not-working/9243

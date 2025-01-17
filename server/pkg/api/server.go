@@ -6,6 +6,8 @@ import (
 	"net"
 	"sync"
 
+	"github.com/whywaita/shoes-lxd-multi/server/pkg/resourcecache"
+
 	myshoespb "github.com/whywaita/myshoes/api/proto.go"
 	pb "github.com/whywaita/shoes-lxd-multi/proto.go"
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/config"
@@ -24,6 +26,8 @@ type ShoesLXDMultiServer struct {
 
 	mu       sync.Mutex
 	poolMode bool
+
+	resourceCache resourcecache.ResourceCache
 }
 
 // New create gRPC server

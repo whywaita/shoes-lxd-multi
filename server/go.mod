@@ -4,9 +4,11 @@ go 1.22.0
 
 require (
 	github.com/docker/go-units v0.5.0
+	github.com/go-redsync/redsync/v4 v4.13.0
 	github.com/lxc/lxd v0.0.0-20211202222358-a293da71aeb0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/prometheus/client_golang v1.12.1
+	github.com/redis/go-redis/v9 v9.7.0
 	github.com/whywaita/myshoes v1.14.0
 	github.com/whywaita/shoes-lxd-multi/proto.go v0.0.0-20230331051154-d763b94b0dd7
 	github.com/whywaita/xsemaphore v0.0.0-20240305080042-cf6ba671d2e7
@@ -18,6 +20,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bradleyfalzon/ghinstallation/v2 v2.0.4 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/flosch/pongo2 v0.0.0-20200913210552-0d938eb266f3 // indirect
 	github.com/go-macaroon-bakery/macaroonpb v1.0.0 // indirect
@@ -28,7 +31,9 @@ require (
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
+	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-hclog v0.14.1 // indirect
+	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-plugin v1.4.3 // indirect
 	github.com/hashicorp/go-version v1.4.0 // indirect
 	github.com/hashicorp/yamux v0.0.0-20180604194846-3520598351bb // indirect

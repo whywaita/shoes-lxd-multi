@@ -53,11 +53,11 @@ func (s *HostConfigMap) Range(f func(key string, value HostConfig) bool) {
 
 // HostConfig is config of lxd host
 type HostConfig struct {
-	Cert tls.Certificate
+	Cert tls.Certificate `json:"cert"`
 
-	LxdHost       string
-	LxdClientCert string
-	LxdClientKey  string
+	LxdHost       string `json:"lxd_host"`
+	LxdClientCert string `json:"lxd_client_cert"`
+	LxdClientKey  string `json:"lxd_client_key"`
 }
 
 func loadHostConfigs() (*HostConfigMap, error) {

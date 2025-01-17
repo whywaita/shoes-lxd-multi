@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/whywaita/shoes-lxd-multi/server/pkg/resourcecache"
+
 	"github.com/docker/go-units"
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -63,15 +65,15 @@ func (ScraperLXD) Help() string {
 }
 
 // Scrape scrape metrics
-func (ScraperLXD) Scrape(ctx context.Context, hostConfigs []config.HostConfig, ch chan<- prometheus.Metric) error {
-	if err := scrapeLXDHosts(ctx, hostConfigs, ch); err != nil {
+func (ScraperLXD) Scrape(ctx context.Context, hostConfigs []config.HostConfig, rc resourcecache.ResourceCache, ch chan<- prometheus.Metric) error {
+	if err := scrapeLXDHosts(ctx, hostConfigs, rc, ch); err != nil {
 		return fmt.Errorf("failed to scrape LXD host: %w", err)
 	}
 
 	return nil
 }
 
-func scrapeLXDHosts(ctx context.Context, hostConfigs []config.HostConfig, ch chan<- prometheus.Metric) error {
+func scrapeLXDHosts(ctx context.Context, hostConfigs []config.HostConfig, rc resourcecache.ResourceCache, ch chan<- prometheus.Metric) error {
 	l := slog.With("method", "scrapeLXDHosts")
 	hosts, errHosts, err := lxdclient.ConnectLXDs(hostConfigs)
 	if err != nil {
@@ -95,7 +97,7 @@ func scrapeLXDHosts(ctx context.Context, hostConfigs []config.HostConfig, ch cha
 
 			_l := l.With("host", host.HostConfig.LxdHost)
 
-			if err := scrapeLXDHost(ctx, host, ch, _l); err != nil {
+			if err := scrapeLXDHost(ctx, host, rc, ch, _l); err != nil {
 				_l.Warn("failed to scrape LXD host", "err", err.Error())
 			}
 		}(host)
@@ -104,7 +106,7 @@ func scrapeLXDHosts(ctx context.Context, hostConfigs []config.HostConfig, ch cha
 	return nil
 }
 
-func scrapeLXDHost(ctx context.Context, host lxdclient.LXDHost, ch chan<- prometheus.Metric, logger *slog.Logger) error {
+func scrapeLXDHost(ctx context.Context, host lxdclient.LXDHost, rc resourcecache.ResourceCache, ch chan<- prometheus.Metric, logger *slog.Logger) error {
 	resources, hostname, err := lxdclient.GetResourceFromLXDWithClient(ctx, host.Client, host.HostConfig.LxdHost, logger)
 	if err != nil {
 		return fmt.Errorf("failed to get resource from lxd: %w", err)
@@ -132,11 +134,7 @@ func scrapeLXDHost(ctx context.Context, host lxdclient.LXDHost, ch chan<- promet
 	ch <- prometheus.MustNewConstMetric(
 		lxdUsageMemory, prometheus.GaugeValue, float64(resources.MemoryUsed), hostname)
 
-	s := lxdclient.LXDStatus{
-		Resource:   *resources,
-		HostConfig: host.HostConfig,
-	}
-	if err := lxdclient.SetStatusCache(host.HostConfig.LxdHost, s); err != nil {
+	if err := rc.SetResourceCache(ctx, host.HostConfig.LxdHost, *resources, resourcecache.DefaultExpireDuration); err != nil {
 		return fmt.Errorf("failed to set status cache: %w", err)
 	}
 

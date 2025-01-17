@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
+	"strings"
 
 	myshoespb "github.com/whywaita/myshoes/api/proto.go"
 	"github.com/whywaita/myshoes/pkg/datastore"
@@ -28,6 +29,13 @@ const (
 	EnvMode = "LXD_MULTI_MODE"
 
 	EnvLogLevel = "LXD_MULTI_LOG_LEVEL"
+
+	// For cluster mode
+
+	// EnvClusterModeEnable is enable multi-cluster mode
+	EnvClusterModeEnable = "LXD_MULTI_CLUSTER_ENABLE"
+	// EnvClusterRedisHosts is redis hosts for multi-cluster mode
+	EnvClusterRedisHosts = "LXD_MULTI_CLUSTER_REDIS_HOSTS"
 )
 
 // Mapping is resource mapping
@@ -39,13 +47,16 @@ type Mapping struct {
 
 // Config is config for host
 type Config struct {
-	LxdHost                HostConfigMap                      `json:"lxd_host"`
+	LxdHost                *HostConfigMap                     `json:"lxd_host"`
 	ResourceTypeMapping    map[myshoespb.ResourceType]Mapping `json:"resource_type_mapping"`
 	ResourceCachePeriodSec int64                              `json:"resource_cache_period_sec"`
 	Port                   int                                `json:"port"`
 	OverCommitPercent      uint64                             `json:"over_commit_percent"`
 	IsPoolMode             bool                               `json:"mode"`
 	LogLevel               slog.Level                         `json:"log_level"`
+
+	ClusterModeIsEnable bool     `json:"cluster_mode_is_enable"`
+	ClusterRedisHosts   []string `json:"cluster_redis_hosts"`
 }
 
 // Load load config from Environment values
@@ -118,14 +129,28 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to parse log level (%s): %w", inLogLevel, err)
 	}
 
+	isClusterModeEnable := os.Getenv(EnvClusterModeEnable) == "true"
+	var clusterRedisHosts []string
+	if isClusterModeEnable {
+		inputClusterRedisHosts := os.Getenv(EnvClusterRedisHosts)
+		if inputClusterRedisHosts == "" {
+			return nil, fmt.Errorf("failed to get %s but %s is true", EnvClusterRedisHosts, EnvClusterModeEnable)
+		}
+
+		clusterRedisHosts = strings.Split(inputClusterRedisHosts, ",")
+	}
+
 	return &Config{
-		LxdHost:                *hostConfigs,
+		LxdHost:                hostConfigs,
 		ResourceTypeMapping:    m,
 		ResourceCachePeriodSec: periodSec,
 		Port:                   port,
 		OverCommitPercent:      overCommitPercent,
 		IsPoolMode:             poolMode,
 		LogLevel:               level,
+
+		ClusterModeIsEnable: isClusterModeEnable,
+		ClusterRedisHosts:   clusterRedisHosts,
 	}, nil
 }
 

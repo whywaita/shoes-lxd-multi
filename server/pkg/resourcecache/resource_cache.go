@@ -3,56 +3,37 @@ package resourcecache
 import (
 	"context"
 	"fmt"
-	"log"
-	"log/slog"
 	"time"
 
-	"github.com/whywaita/shoes-lxd-multi/server/pkg/config"
-	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
+	"github.com/lxc/lxd/shared/api"
 )
 
-// RunLXDResourceCacheTicker is run ticker for set lxd resource cache
-func RunLXDResourceCacheTicker(ctx context.Context, hcs []config.HostConfig, periodSec int64) {
-	ticker := time.NewTicker(time.Duration(periodSec) * time.Second)
-	defer ticker.Stop()
+var (
+	// ErrCacheNotFound is error message for cache not found
+	ErrCacheNotFound = fmt.Errorf("cache not found")
 
-	for {
-		<-ticker.C
-		if err := reloadLXDHostResourceCache(ctx, hcs); err != nil {
-			log.Fatal("failed to set lxd resource cache", "err", err.Error())
-		}
-	}
+	// DefaultLockTTL is default TTL for lock
+	DefaultLockTTL = 5 * time.Second
+	// DefaultExpireDuration is default expire duration
+	DefaultExpireDuration = 10 * time.Second
+)
+
+// Resource is resource of lxd host
+type Resource struct {
+	Instances []api.Instance `json:"instances"`
+
+	CPUTotal    uint64 `json:"cpu_total"`
+	MemoryTotal uint64 `json:"memory_total"`
+	CPUUsed     uint64 `json:"cpu_used"`
+	MemoryUsed  uint64 `json:"memory_used"`
 }
 
-func reloadLXDHostResourceCache(ctx context.Context, hcs []config.HostConfig) error {
-	l := slog.With("method", "reloadLXDHostResourceCache")
-	hosts, _, err := lxdclient.ConnectLXDs(hcs)
-	if err != nil {
-		return fmt.Errorf("failed to connect LXD hosts: %s", err)
-	}
+// ResourceCache is cache interface
+type ResourceCache interface {
+	GetResourceCache(ctx context.Context, hostname string) (*Resource, *time.Time, error)
+	SetResourceCache(ctx context.Context, hostname string, resource Resource, expired time.Duration) error
+	ListResourceCache(ctx context.Context) ([]Resource, []string, []time.Time, error)
 
-	for _, host := range hosts {
-		_l := l.With("host", host.HostConfig.LxdHost)
-		if err := setLXDHostResourceCache(ctx, &host, _l); err != nil {
-			_l.Warn("failed to set lxd host resource cache", "err", err.Error())
-			continue
-		}
-	}
-	return nil
-}
-
-func setLXDHostResourceCache(ctx context.Context, host *lxdclient.LXDHost, logger *slog.Logger) error {
-	resources, _, err := lxdclient.GetResourceFromLXDWithClient(ctx, host.Client, host.HostConfig.LxdHost, logger)
-	if err != nil {
-		return fmt.Errorf("failed to get resource from lxd: %s", err)
-	}
-
-	s := lxdclient.LXDStatus{
-		Resource:   *resources,
-		HostConfig: host.HostConfig,
-	}
-	if err := lxdclient.SetStatusCache(host.HostConfig.LxdHost, s); err != nil {
-		return fmt.Errorf("failed to set status cache: %s", err)
-	}
-	return nil
+	Lock(ctx context.Context, hostname string) error
+	Unlock(ctx context.Context, hostname string) error
 }

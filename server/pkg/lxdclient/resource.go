@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/config"
+	"github.com/whywaita/shoes-lxd-multi/server/pkg/resourcecache"
 
 	"github.com/docker/go-units"
 	lxd "github.com/lxc/lxd/client"
@@ -16,14 +17,12 @@ import (
 	"github.com/whywaita/xsemaphore"
 )
 
-// Resource is resource of lxd host
-type Resource struct {
-	Instances []api.Instance
+// LXDStatus is status for LXD
+type LXDStatus struct {
+	IsGood bool `json:"is_good"`
 
-	CPUTotal    uint64
-	MemoryTotal uint64
-	CPUUsed     uint64
-	MemoryUsed  uint64
+	Resource   resourcecache.Resource `json:"resource"`
+	HostConfig config.HostConfig      `json:"host_config"`
 }
 
 const (
@@ -38,18 +37,18 @@ const (
 )
 
 // GetCPUOverCommitPercent calculate percent of over commit
-func GetCPUOverCommitPercent(in Resource) uint64 {
+func GetCPUOverCommitPercent(in resourcecache.Resource) uint64 {
 	return uint64(float64(in.CPUUsed) / float64(in.CPUTotal) * 100.0)
 }
 
 // GetResource get Resource
-func GetResource(ctx context.Context, hostConfig config.HostConfig, logger *slog.Logger) (*Resource, error) {
-	status, err := GetStatusCache(hostConfig.LxdHost)
+func GetResource(ctx context.Context, hostConfig config.HostConfig, rc resourcecache.ResourceCache, logger *slog.Logger) (*resourcecache.Resource, error) {
+	resource, _, err := rc.GetResourceCache(ctx, hostConfig.LxdHost)
 	if err == nil {
 		// found from cache
-		return &status.Resource, nil
+		return resource, nil
 	}
-	if err != nil && !errors.Is(err, ErrCacheNotFound) {
+	if !errors.Is(err, resourcecache.ErrCacheNotFound) {
 		return nil, fmt.Errorf("failed to get status from cache: %w", err)
 	}
 
@@ -59,11 +58,7 @@ func GetResource(ctx context.Context, hostConfig config.HostConfig, logger *slog
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resource from lxd: %w", err)
 	}
-	s := LXDStatus{
-		Resource:   *r,
-		HostConfig: hostConfig,
-	}
-	if err := SetStatusCache(hostConfig.LxdHost, s); err != nil {
+	if err := rc.SetResourceCache(ctx, hostConfig.LxdHost, *r, resourcecache.DefaultExpireDuration); err != nil {
 		return nil, fmt.Errorf("failed to set status to cache: %w", err)
 	}
 
@@ -71,7 +66,7 @@ func GetResource(ctx context.Context, hostConfig config.HostConfig, logger *slog
 }
 
 // GetResourceFromLXD get resources from LXD API
-func GetResourceFromLXD(ctx context.Context, hostConfig config.HostConfig, logger *slog.Logger) (*Resource, string, error) {
+func GetResourceFromLXD(ctx context.Context, hostConfig config.HostConfig, logger *slog.Logger) (*resourcecache.Resource, string, error) {
 	client, err := ConnectLXDWithTimeout(hostConfig.LxdHost, hostConfig.LxdClientCert, hostConfig.LxdClientKey)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to connect lxd: %w", err)
@@ -81,7 +76,7 @@ func GetResourceFromLXD(ctx context.Context, hostConfig config.HostConfig, logge
 }
 
 // GetResourceFromLXDWithClient get resources from LXD API with client
-func GetResourceFromLXDWithClient(ctx context.Context, client lxd.InstanceServer, host string, logger *slog.Logger) (*Resource, string, error) {
+func GetResourceFromLXDWithClient(ctx context.Context, client lxd.InstanceServer, host string, logger *slog.Logger) (*resourcecache.Resource, string, error) {
 	sem := xsemaphore.Get(host, 1)
 	if err := sem.Acquire(ctx, 1); err != nil {
 		return nil, "", fmt.Errorf("failed to acquire semaphore: %w", err)
@@ -101,7 +96,7 @@ func GetResourceFromLXDWithClient(ctx context.Context, client lxd.InstanceServer
 		return nil, "", fmt.Errorf("failed to scrape allocated resource: %w", err)
 	}
 
-	r := Resource{
+	r := resourcecache.Resource{
 		Instances:   instances,
 		CPUTotal:    cpuTotal,
 		MemoryTotal: memoryTotal,
