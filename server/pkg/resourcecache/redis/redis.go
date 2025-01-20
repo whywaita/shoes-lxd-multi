@@ -50,6 +50,10 @@ func (r *Redis) GetResourceCache(ctx context.Context, hostname string) (*resourc
 	}
 	defer mu.Unlock()
 
+	return r.GetResourceCacheWithoutLock(ctx, hostname)
+}
+
+func (r *Redis) GetResourceCacheWithoutLock(ctx context.Context, hostname string) (*resourcecache.Resource, *time.Time, error) {
 	pipe := r.Client.Pipeline()
 	getCmd := pipe.Get(ctx, getCacheKey(hostname))
 	expireCmd := pipe.TTL(ctx, getCacheKey(hostname))
@@ -94,6 +98,10 @@ func (r *Redis) SetResourceCache(ctx context.Context, hostname string, resource 
 	}
 	defer mu.Unlock()
 
+	return r.SetResourceCacheWithoutLock(ctx, hostname, resource, expired)
+}
+
+func (r *Redis) SetResourceCacheWithoutLock(ctx context.Context, hostname string, resource resourcecache.Resource, expired time.Duration) error {
 	b, err := json.Marshal(resource)
 	if err != nil {
 		return fmt.Errorf("failed to marshal json: %w", err)
@@ -119,6 +127,10 @@ func (r *Redis) ListResourceCache(ctx context.Context) ([]resourcecache.Resource
 	keys, err := r.Client.Keys(ctx, "host-*").Result()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to get keys: %w", err)
+	}
+
+	if len(keys) == 0 {
+		return nil, nil, nil, resourcecache.ErrCacheNotFound
 	}
 
 	keyDataList, err := getValuesAndTTLs(ctx, r.Client, keys)

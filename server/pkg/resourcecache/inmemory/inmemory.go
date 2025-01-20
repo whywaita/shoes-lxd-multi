@@ -60,8 +60,28 @@ func (m *Memory) GetResourceCache(ctx context.Context, hostname string) (*resour
 	return &resource, &expired, nil
 }
 
+// GetResourceCacheWithoutLock get a cache without lock
+func (m *Memory) GetResourceCacheWithoutLock(ctx context.Context, hostname string) (*resourcecache.Resource, *time.Time, error) {
+	resp, expired, ok := m.Cache.GetWithExpiration(getCacheKey(hostname))
+	if !ok {
+		return nil, nil, resourcecache.ErrCacheNotFound
+	}
+
+	resource, ok := resp.(resourcecache.Resource)
+	if !ok {
+		return nil, nil, fmt.Errorf("failed to cast resource")
+	}
+	return &resource, &expired, nil
+}
+
 // SetResourceCache set cache
 func (m *Memory) SetResourceCache(ctx context.Context, hostname string, status resourcecache.Resource, expired time.Duration) error {
+	m.Cache.Set(getCacheKey(hostname), status, expired)
+	return nil
+}
+
+// SetResourceCacheWithoutLock set cache without lock
+func (m *Memory) SetResourceCacheWithoutLock(ctx context.Context, hostname string, status resourcecache.Resource, expired time.Duration) error {
 	m.Cache.Set(getCacheKey(hostname), status, expired)
 	return nil
 }

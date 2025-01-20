@@ -31,7 +31,9 @@ type Resource struct {
 // ResourceCache is cache interface
 type ResourceCache interface {
 	GetResourceCache(ctx context.Context, hostname string) (*Resource, *time.Time, error)
+	GetResourceCacheWithoutLock(ctx context.Context, hostname string) (*Resource, *time.Time, error)
 	SetResourceCache(ctx context.Context, hostname string, resource Resource, expired time.Duration) error
+	SetResourceCacheWithoutLock(ctx context.Context, hostname string, resource Resource, expired time.Duration) error
 	ListResourceCache(ctx context.Context) ([]Resource, []string, []time.Time, error)
 
 	Lock(ctx context.Context, hostname string) error

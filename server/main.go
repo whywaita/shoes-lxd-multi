@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -114,7 +115,7 @@ func RunLXDResourceCacheTicker(ctx context.Context, rc resourcecache.ResourceCac
 	for {
 		<-ticker.C
 		if err := reloadLXDHostResourceCache(ctx, rc, hcs); err != nil {
-			log.Fatal("failed to set lxd resource cache", "err", err.Error())
+			slog.Error("failed to set lxd resource cache", "err", err.Error())
 		}
 	}
 }
@@ -122,7 +123,7 @@ func RunLXDResourceCacheTicker(ctx context.Context, rc resourcecache.ResourceCac
 func reloadLXDHostResourceCache(ctx context.Context, rc resourcecache.ResourceCache, hcs []config.HostConfig) error {
 	l := slog.With("method", "reloadLXDHostResourceCache")
 	_, hostnames, _, err := rc.ListResourceCache(ctx)
-	if err != nil {
+	if err != nil && !errors.Is(err, resourcecache.ErrCacheNotFound) {
 		return fmt.Errorf("failed to list resource cache: %s", err)
 	}
 
@@ -160,7 +161,7 @@ func setLXDHostResourceCache(ctx context.Context, rc resourcecache.ResourceCache
 	}
 
 	cacheExpireDuration := time.Duration((1 + rand.Float64()) * 1000) // 1-2 seconds, for avoid cache stampede
-	if err := rc.SetResourceCache(ctx, host.HostConfig.LxdHost, *resources, cacheExpireDuration*time.Millisecond); err != nil {
+	if err := rc.SetResourceCacheWithoutLock(ctx, host.HostConfig.LxdHost, *resources, cacheExpireDuration*time.Millisecond); err != nil {
 		return fmt.Errorf("failed to set status cache: %s", err)
 	}
 	return nil
