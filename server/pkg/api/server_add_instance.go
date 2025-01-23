@@ -279,6 +279,11 @@ func (s *ShoesLXDMultiServer) getInstanceDevices() map[string]map[string]string 
 			"source": "/dev/kmsg",
 			"type":   "unix-char",
 		},
+		"kvm": {
+			"path":   "/dev/kvm",
+			"source": "/dev/kvm",
+			"type":   "unix-char",
+		},
 	}
 
 	return instanceDevices
