@@ -4,7 +4,7 @@ go 1.23
 
 require (
 	github.com/lxc/lxd v0.0.0-20220308034307-91f3610e71c1
-	github.com/pelletier/go-toml/v2 v2.2.1
+	github.com/pelletier/go-toml/v2 v2.2.3
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.12.1
 	github.com/spf13/cobra v1.3.0

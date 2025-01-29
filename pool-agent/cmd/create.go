@@ -25,7 +25,7 @@ func (a *Agent) createInstance(iname, rtName string, rt resourceType, version st
 					"lxc.cgroup.devices.allow = a",
 					"lxc.cap.drop=",
 				}, "\n"),
-				configKeyImageAlias:   a.Config[version].ImageAlias,
+				configKeyImageAlias:   a.Image[version].config.ImageAlias,
 				configKeyResourceType: rtName,
 			},
 			Devices: map[string]map[string]string{
@@ -41,7 +41,7 @@ func (a *Agent) createInstance(iname, rtName string, rt resourceType, version st
 				},
 			},
 		},
-		Source: a.Config[version].InstanceSource,
+		Source: a.Image[version].InstanceSource,
 	})
 	if err != nil {
 		return fmt.Errorf("create: %w", err)
