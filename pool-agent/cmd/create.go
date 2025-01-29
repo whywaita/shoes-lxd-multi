@@ -34,6 +34,11 @@ func (a *Agent) createInstance(iname, rtName string, rt resourceType, version st
 					"source": "/dev/kmsg",
 					"type":   "unix-char",
 				},
+				"kvm": {
+					"path":   "/dev/kvm",
+					"source": "/dev/kvm",
+					"type":   "unix-char",
+				},
 			},
 		},
 		Source: a.Config[version].InstanceSource,
