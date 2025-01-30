@@ -80,7 +80,11 @@ func newImage(conf ConfigPerImage) (*Image, error) {
 }
 
 func newAgent(ctx context.Context) (*Agent, error) {
-	conf, err := LoadConfig()
+	f, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed read config file: %w", err)
+	}
+	conf, err := LoadConfig(f)
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
@@ -129,7 +133,11 @@ func newAgent(ctx context.Context) (*Agent, error) {
 }
 
 func (a *Agent) reloadConfig() error {
-	conf, err := LoadConfig()
+	f, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("failed read config file: %w", err)
+	}
+	conf, err := LoadConfig(f)
 	if err != nil {
 		return fmt.Errorf("reload config: %w", err)
 	}

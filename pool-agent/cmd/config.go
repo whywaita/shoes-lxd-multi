@@ -13,10 +13,12 @@ import (
 type Config struct {
 	ResourceTypesMap ResourceTypesMap          `toml:"resource_types_map"`
 	ConfigPerImage   map[string]ConfigPerImage `toml:"config"`
+}
 
-	// For backward compatibility, use first version config.
+type ConfigOld struct {
 	ImageAlias          string              `toml:"image_alias"`
 	ResourceTypesCounts ResourceTypesCounts `toml:"resource_types_counts"`
+	ResourceTypeMap     []resourceTypeOld   `toml:"resource_types_map"`
 }
 
 // ConfigPerImage is config map per image.
@@ -33,12 +35,18 @@ type resourceType struct {
 // ResourceTypesMap is resource configuration for pool mode.
 type ResourceTypesMap map[string]resourceType
 
+type resourceTypeOld struct {
+	Name    string `toml:"name"`
+	CPUCore int    `toml:"cpu"`
+	Memory  string `toml:"memory"`
+}
+
 // ResourceTypesCounts is counts of instance by resource types.
 type ResourceTypesCounts map[string]int
 
 // LoadConfig loads config from configPath
-func LoadConfig() (*Config, error) {
-	c, err := loadConfig()
+func LoadConfig(body []byte) (*Config, error) {
+	c, err := loadConfig(body)
 	if err != nil {
 		return nil, fmt.Errorf("load config from file: %w", err)
 	}
@@ -46,31 +54,52 @@ func LoadConfig() (*Config, error) {
 	// For backward compatibility, use old format if unset config of image.
 	if c.ConfigPerImage == nil {
 		slog.Warn("config is not set, use old format")
-		if c.ImageAlias == "" {
-			return nil, fmt.Errorf("image_alias for old format is not set")
+		cOld, err := loadConfigOld(body)
+		if err != nil {
+			return nil, fmt.Errorf("load config (old format) from file: %w", err)
 		}
 
-		c.ConfigPerImage = map[string]ConfigPerImage{
-			"default": {
-				ImageAlias:          c.ImageAlias,
-				ResourceTypesCounts: c.ResourceTypesCounts,
-			},
-		}
+		c = cOld.toConfig()
 	}
 
 	return c, nil
 }
 
-func loadConfig() (*Config, error) {
-	f, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed read config file: %w", err)
-	}
+func loadConfig(body []byte) (*Config, error) {
 	var s Config
-	if err := toml.Unmarshal(f, &s); err != nil {
+	if err := toml.Unmarshal(body, &s); err != nil {
 		return nil, fmt.Errorf("parse config file: %w", err)
 	}
 	return &s, nil
+}
+
+func loadConfigOld(body []byte) (*ConfigOld, error) {
+	var s ConfigOld
+	if err := toml.Unmarshal(body, &s); err != nil {
+		return nil, fmt.Errorf("parse config file: %w", err)
+	}
+	return &s, nil
+}
+
+func (co *ConfigOld) toConfig() *Config {
+	r := make(map[string]ConfigPerImage, 1)
+	r["default"] = ConfigPerImage{
+		ImageAlias:          co.ImageAlias,
+		ResourceTypesCounts: co.ResourceTypesCounts,
+	}
+
+	m := make(ResourceTypesMap, len(co.ResourceTypeMap))
+	for _, rt := range co.ResourceTypeMap {
+		m[rt.Name] = resourceType{
+			CPUCore: rt.CPUCore,
+			Memory:  rt.Memory,
+		}
+	}
+
+	return &Config{
+		ResourceTypesMap: m,
+		ConfigPerImage:   r,
+	}
 }
 
 //// LoadImageAlias loads image alias from environment variable "LXD_MULTI_IMAGE_ALIAS".
