@@ -48,17 +48,14 @@ type ResourceTypesCounts map[string]int
 func LoadConfig(body []byte) (*Config, error) {
 	c, err := loadConfig(body)
 	if err != nil {
-		return nil, fmt.Errorf("load config from file: %w", err)
-	}
-
-	// For backward compatibility, use old format if unset config of image.
-	if c.ConfigPerImage == nil {
-		slog.Warn("config is not set, use old format")
-		cOld, err := loadConfigOld(body)
-		if err != nil {
-			return nil, fmt.Errorf("load config (old format) from file: %w", err)
+		// For backward compatibility, use old format if unset config of image.
+		cOld, errOld := loadConfigOld(body)
+		if errOld != nil {
+			slog.Warn("load config (old format) from file", slog.String("err", errOld.Error()))
+			return nil, fmt.Errorf("load config from file: %w", err)
 		}
 
+		slog.Warn("config is not set, use old format")
 		c = cOld.toConfig()
 	}
 
