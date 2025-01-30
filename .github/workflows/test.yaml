@@ -36,7 +36,7 @@ jobs:
       - name: go test
         run: |
           cd ${{ matrix.target }}
-          go test ./...
+          go test -v ./...
   docker-build-test:
     runs-on: ubuntu-20.04
     steps:
