@@ -30,6 +30,9 @@ const (
 	EnvLogLevel = "LXD_MULTI_LOG_LEVEL"
 
 	EnvLXDImageAliasMapping = "LXD_MULTI_IMAGE_ALIAS_MAPPING"
+
+	// EnvLXDImageAlias is old environment variable for image alias, for backward compatibility
+	EnvLXDImageAlias = "LXD_MULTI_IMAGE_ALIAS"
 )
 
 // Mapping is resource mapping
@@ -64,6 +67,12 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, map[string]stri
 		if _, ok := imageAliasMap["default"]; !ok {
 			return nil, nil, nil, 0, -1, 0, false, nil, fmt.Errorf("default image alias is required, actual: %v", imageAliasMap)
 		}
+	} else {
+		imageAlias := os.Getenv(EnvLXDImageAlias)
+		if imageAlias == "" {
+			return nil, nil, nil, 0, -1, 0, false, nil, fmt.Errorf("%s or %s is required", EnvLXDImageAliasMapping, EnvLXDImageAlias)
+		}
+		imageAliasMap = map[string]string{"default": imageAlias}
 	}
 
 	envPeriodSec := os.Getenv(EnvLXDResourceCachePeriodSec)
