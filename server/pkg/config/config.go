@@ -61,6 +61,9 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, map[string]stri
 		if err := json.Unmarshal([]byte(envImageAliasJSON), &imageAliasMap); err != nil {
 			return nil, nil, nil, 0, -1, 0, false, nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
 		}
+		if _, ok := imageAliasMap["default"]; !ok {
+			return nil, nil, nil, 0, -1, 0, false, nil, fmt.Errorf("default image alias is required, actual: %v", imageAliasMap)
+		}
 	}
 
 	envPeriodSec := os.Getenv(EnvLXDResourceCachePeriodSec)
