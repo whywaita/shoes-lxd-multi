@@ -28,6 +28,11 @@ const (
 	EnvMode = "LXD_MULTI_MODE"
 
 	EnvLogLevel = "LXD_MULTI_LOG_LEVEL"
+
+	EnvLXDImageAliasMapping = "LXD_MULTI_IMAGE_ALIAS_MAPPING"
+
+	// EnvLXDImageAlias is old environment variable for image alias, for backward compatibility
+	EnvLXDImageAlias = "LXD_MULTI_IMAGE_ALIAS"
 )
 
 // Mapping is resource mapping
@@ -38,10 +43,10 @@ type Mapping struct {
 }
 
 // Load load config from Environment values
-func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int64, int, uint64, bool, *slog.Level, error) {
+func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, map[string]string, int64, int, uint64, bool, *slog.Level, error) {
 	hostConfigs, err := loadHostConfigs()
 	if err != nil {
-		return nil, nil, 0, -1, 0, false, nil, fmt.Errorf("failed to load host config: %w", err)
+		return nil, nil, nil, 0, -1, 0, false, nil, fmt.Errorf("failed to load host config: %w", err)
 	}
 
 	envMappingJSON := os.Getenv(EnvLXDResourceTypeMapping)
@@ -49,8 +54,25 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int64, int, uin
 	if envMappingJSON != "" {
 		m, err = readResourceTypeMapping(envMappingJSON)
 		if err != nil {
-			return nil, nil, 0, -1, 0, false, nil, fmt.Errorf("failed to read %s: %w", EnvLXDResourceTypeMapping, err)
+			return nil, nil, nil, 0, -1, 0, false, nil, fmt.Errorf("failed to read %s: %w", EnvLXDResourceTypeMapping, err)
 		}
+	}
+
+	envImageAliasJSON := os.Getenv(EnvLXDImageAliasMapping)
+	var imageAliasMap map[string]string
+	if envImageAliasJSON != "" {
+		if err := json.Unmarshal([]byte(envImageAliasJSON), &imageAliasMap); err != nil {
+			return nil, nil, nil, 0, -1, 0, false, nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
+		}
+		if _, ok := imageAliasMap["default"]; !ok {
+			return nil, nil, nil, 0, -1, 0, false, nil, fmt.Errorf("default image alias is required, actual: %v", imageAliasMap)
+		}
+	} else {
+		imageAlias := os.Getenv(EnvLXDImageAlias)
+		if imageAlias == "" {
+			return nil, nil, nil, 0, -1, 0, false, nil, fmt.Errorf("%s or %s is required", EnvLXDImageAliasMapping, EnvLXDImageAlias)
+		}
+		imageAliasMap = map[string]string{"default": imageAlias}
 	}
 
 	envPeriodSec := os.Getenv(EnvLXDResourceCachePeriodSec)
@@ -60,7 +82,7 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int64, int, uin
 	} else {
 		periodSec, err = strconv.ParseInt(envPeriodSec, 10, 64)
 		if err != nil {
-			return nil, nil, 0, -1, 0, false, nil, fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
+			return nil, nil, nil, 0, -1, 0, false, nil, fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
 		}
 	}
 	log.Printf("periodSec: %d\n", periodSec)
@@ -72,7 +94,7 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int64, int, uin
 	} else {
 		port, err = strconv.Atoi(envPort)
 		if err != nil {
-			return nil, nil, 0, -1, 0, false, nil, fmt.Errorf("failed to parse %s, need to int: %w", EnvPort, err)
+			return nil, nil, nil, 0, -1, 0, false, nil, fmt.Errorf("failed to parse %s, need to int: %w", EnvPort, err)
 		}
 	}
 
@@ -83,7 +105,7 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int64, int, uin
 	} else {
 		overCommitPercent, err = strconv.ParseUint(envOCP, 10, 64)
 		if err != nil {
-			return nil, nil, 0, -1, 0, false, nil, fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
+			return nil, nil, nil, 0, -1, 0, false, nil, fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
 		}
 	}
 	log.Printf("overCommitPercent: %d\n", overCommitPercent)
@@ -95,7 +117,7 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int64, int, uin
 	case "pool":
 		poolMode = true
 	default:
-		return nil, nil, 0, -1, 0, false, nil, fmt.Errorf(`unknown mode %q (expected "create" or "pool")`, os.Getenv(EnvMode))
+		return nil, nil, nil, 0, -1, 0, false, nil, fmt.Errorf(`unknown mode %q (expected "create" or "pool")`, os.Getenv(EnvMode))
 	}
 
 	var inLogLevel string
@@ -104,10 +126,10 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, int64, int, uin
 		inLogLevel = "INFO"
 	}
 	if err := level.UnmarshalText([]byte(inLogLevel)); err != nil {
-		return nil, nil, 0, -1, 0, false, nil, fmt.Errorf("failed to parse log level (%s): %w", inLogLevel, err)
+		return nil, nil, nil, 0, -1, 0, false, nil, fmt.Errorf("failed to parse log level (%s): %w", inLogLevel, err)
 	}
 
-	return hostConfigs, m, periodSec, port, overCommitPercent, poolMode, &level, nil
+	return hostConfigs, m, imageAliasMap, periodSec, port, overCommitPercent, poolMode, &level, nil
 }
 
 func readResourceTypeMapping(env string) (map[myshoespb.ResourceType]Mapping, error) {
