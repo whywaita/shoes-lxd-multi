@@ -39,6 +39,22 @@ Server-side implementation for shoes-lxd-multi
 - `LXD_MULTI_LOG_LEVEL`
     - Log level (`debug`, `info`, `warn`, `error`, `fatal`, `panic`) will set to `log/slog.Level`
     - default: `info`
+- `LXD_MULTI_IMAGE_ALIAS_MAPPING`
+    - default: fallback to `LXD_MULTI_IMAGE_ALIAS`, for backward compatibility.
+    - must be in JSON format as `{"<image_name>": "<image_alias>"}`.
+        - `default` must be set.
+    - e.g.) `{"default": "2004", "latest": "2404", "2004": "ubuntu:focal", "2404": "ubuntu:noble"}`
+        - supports recursive resolution
+            - in this case:
+                - `default` is `2004`
+                - `2004` resolves to `ubuntu:focal`
+                - `latest` is `2404`, which resolves to `ubuntu:noble`
+- `LXD_MULTI_IMAGE_ALIAS`
+    - moved from shoes-lxd-multi plugin, for backward compatibility.
+    - set runner image alias
+    - default: `ubuntu:bionic`
+    - e.g.) for remote image server: `https://192.0.2.110:8443/ubuntu-custom`
+
 
 ## Note
 LXD Server can't use `zfs` in storageclass if use `--privileged`. ref: https://discuss.linuxcontainers.org/t/docker-with-overlay-driver-in-lxd-cluster-not-working/9243
