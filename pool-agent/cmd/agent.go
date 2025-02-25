@@ -329,7 +329,7 @@ func (a *Agent) collectMetrics() error {
 	}
 	lxdInstances.Reset()
 	for _, i := range s {
-		lxdInstances.WithLabelValues(i.Status, i.Config[configKeyResourceType], i.Config[configKeyImageAlias]).Inc()
+		lxdInstances.WithLabelValues(i.Status, i.Config[configKeyResourceType], i.Config[configKeyImageAlias], i.Name, i.Config[configKeyRunnerName]).Inc()
 	}
 	return nil
 }
