@@ -26,7 +26,7 @@ func RunLXDResourceCacheTicker(ctx context.Context, hcs []config.HostConfig, per
 
 func reloadLXDHostResourceCache(ctx context.Context, hcs []config.HostConfig) error {
 	l := slog.With("method", "reloadLXDHostResourceCache")
-	hosts, _, err := lxdclient.ConnectLXDs(hcs)
+	hosts, _, err := lxdclient.ConnectLXDs(ctx, hcs)
 	if err != nil {
 		return fmt.Errorf("failed to connect LXD hosts: %s", err)
 	}

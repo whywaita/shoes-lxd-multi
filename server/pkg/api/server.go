@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
@@ -56,7 +57,7 @@ func (s *ShoesLXDMultiServer) Run(listenPort int) error {
 	return nil
 }
 
-func (s *ShoesLXDMultiServer) validateTargetHosts(targetHosts []string, logger *slog.Logger) ([]lxdclient.LXDHost, error) {
+func (s *ShoesLXDMultiServer) validateTargetHosts(ctx context.Context, targetHosts []string, logger *slog.Logger) ([]lxdclient.LXDHost, error) {
 	var hostConfigs []config.HostConfig
 
 	for _, target := range targetHosts {
@@ -74,7 +75,7 @@ func (s *ShoesLXDMultiServer) validateTargetHosts(targetHosts []string, logger *
 		return nil, fmt.Errorf("valid target host is not found")
 	}
 
-	targetLXDHosts, _, err := lxdclient.ConnectLXDs(hostConfigs)
+	targetLXDHosts, _, err := lxdclient.ConnectLXDs(ctx, hostConfigs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect LXD: %w", err)
 	}

@@ -7,10 +7,11 @@ import (
 	"log/slog"
 	"strconv"
 	"sync"
-
-	"github.com/whywaita/shoes-lxd-multi/server/pkg/config"
+	"time"
 
 	"github.com/docker/go-units"
+	"github.com/whywaita/shoes-lxd-multi/server/pkg/config"
+
 	lxd "github.com/lxc/lxd/client"
 	"github.com/lxc/lxd/shared/api"
 	"github.com/whywaita/xsemaphore"
@@ -49,7 +50,7 @@ func GetResource(ctx context.Context, hostConfig config.HostConfig, logger *slog
 		// found from cache
 		return &status.Resource, nil
 	}
-	if err != nil && !errors.Is(err, ErrCacheNotFound) {
+	if !errors.Is(err, ErrCacheNotFound) {
 		return nil, fmt.Errorf("failed to get status from cache: %w", err)
 	}
 
@@ -72,12 +73,20 @@ func GetResource(ctx context.Context, hostConfig config.HostConfig, logger *slog
 
 // GetResourceFromLXD get resources from LXD API
 func GetResourceFromLXD(ctx context.Context, hostConfig config.HostConfig, logger *slog.Logger) (*Resource, string, error) {
-	client, err := ConnectLXDWithTimeout(hostConfig.LxdHost, hostConfig.LxdClientCert, hostConfig.LxdClientKey)
+	client, err := ConnectLXDWithTimeout(ctx, hostConfig.LxdHost, hostConfig.LxdClientCert, hostConfig.LxdClientKey)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to connect lxd: %w", err)
 	}
 
-	return GetResourceFromLXDWithClient(ctx, *client, hostConfig.LxdHost, logger)
+	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	c := client.WithContext(cctx)
+
+	r, hostname, err := GetResourceFromLXDWithClient(cctx, c, hostConfig.LxdHost, logger)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get resource from lxd: %w", err)
+	}
+	return r, hostname, nil
 }
 
 // GetResourceFromLXDWithClient get resources from LXD API with client
@@ -87,6 +96,11 @@ func GetResourceFromLXDWithClient(ctx context.Context, client lxd.InstanceServer
 		return nil, "", fmt.Errorf("failed to acquire semaphore: %w", err)
 	}
 	defer sem.Release(1)
+
+	// cast ProtocolLXD from lxd.InstanceServer
+	c := client.(*lxd.ProtocolLXD)
+	// Set context to client
+	client = c.WithContext(ctx)
 
 	cpuTotal, memoryTotal, hostname, err := ScrapeLXDHostResources(client, host, logger)
 	if err != nil {

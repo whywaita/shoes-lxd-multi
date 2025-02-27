@@ -18,7 +18,7 @@ func (s *ShoesLXDMultiServer) DeleteInstance(ctx context.Context, req *pb.Delete
 	l := slog.With("method", "DeleteInstance")
 	instanceName := req.CloudId
 	l = l.With("instanceName", instanceName)
-	targetLXDHosts, err := s.validateTargetHosts(req.TargetHosts, l)
+	targetLXDHosts, err := s.validateTargetHosts(ctx, req.TargetHosts, l)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to validate target hosts: %+v", err)
 	}

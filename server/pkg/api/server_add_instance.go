@@ -39,7 +39,7 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	}
 	l = l.With("runnerName", req.RunnerName)
 
-	targetLXDHosts, err := s.validateTargetHosts(req.TargetHosts, l)
+	targetLXDHosts, err := s.validateTargetHosts(ctx, req.TargetHosts, l)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to validate target hosts: %+v", err)
 	}

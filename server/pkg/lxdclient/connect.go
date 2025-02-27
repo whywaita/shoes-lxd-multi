@@ -1,6 +1,7 @@
 package lxdclient
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -15,7 +16,7 @@ import (
 
 // LXDHost is client of LXD and host config
 type LXDHost struct {
-	Client     lxd.InstanceServer
+	Client     *lxd.ProtocolLXD
 	HostConfig config.HostConfig
 }
 
@@ -26,7 +27,7 @@ type ErrLXDHost struct {
 }
 
 // ConnectLXDs connect LXDs
-func ConnectLXDs(hostConfigs []config.HostConfig) ([]LXDHost, []ErrLXDHost, error) {
+func ConnectLXDs(ctx context.Context, hostConfigs []config.HostConfig) ([]LXDHost, []ErrLXDHost, error) {
 	var targetLXDHosts []LXDHost
 	var errLXDHosts []ErrLXDHost
 
@@ -37,7 +38,7 @@ func ConnectLXDs(hostConfigs []config.HostConfig) ([]LXDHost, []ErrLXDHost, erro
 		hc := hc
 		l := slog.With("host", hc.LxdHost)
 		eg.Go(func() error {
-			conn, err := ConnectLXDWithTimeout(hc.LxdHost, hc.LxdClientCert, hc.LxdClientKey)
+			conn, err := ConnectLXDWithTimeout(ctx, hc.LxdHost, hc.LxdClientCert, hc.LxdClientKey)
 			if err != nil && !errors.Is(err, ErrTimeoutConnectLXD) {
 				l.Warn("failed to connect LXD with timeout (not ErrTimeoutConnectLXD)", "err", err.Error())
 				errLXDHosts = append(errLXDHosts, ErrLXDHost{
@@ -56,7 +57,7 @@ func ConnectLXDs(hostConfigs []config.HostConfig) ([]LXDHost, []ErrLXDHost, erro
 
 			mu.Lock()
 			targetLXDHosts = append(targetLXDHosts, LXDHost{
-				Client:     *conn,
+				Client:     conn,
 				HostConfig: hc,
 			})
 			mu.Unlock()
@@ -86,46 +87,40 @@ var (
 
 // ConnectLXDWithTimeout connect LXD API with timeout
 // lxd.ConnectLXD is not support context yet. So ConnectLXDWithTimeout occurred goroutine leak if timeout.
-func ConnectLXDWithTimeout(host, clientCert, clientKey string) (*lxd.InstanceServer, error) {
-	client, ok := loadConnectedInstance(host)
-	if ok {
+func ConnectLXDWithTimeout(ctx context.Context, host, clientCert, clientKey string) (*lxd.ProtocolLXD, error) {
+	if client, ok := loadConnectedInstance(host); ok {
 		return client, nil
 	}
 
-	type resultConnectLXD struct {
-		client lxd.InstanceServer
-		err    error
+	cctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	args := &lxd.ConnectionArgs{
+		UserAgent:          "shoes-lxd",
+		TLSClientCert:      clientCert,
+		TLSClientKey:       clientKey,
+		InsecureSkipVerify: true,
+	}
+	client, err := lxd.ConnectLXDWithContext(cctx, host, args)
+	if err != nil {
+		// if timeout, return ErrTimeoutConnectLXD
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, ErrTimeoutConnectLXD
+		}
+
+		return nil, fmt.Errorf("failed to connect LXD: %w", err)
+	}
+	c, ok := client.(*lxd.ProtocolLXD)
+	if !ok {
+		return nil, fmt.Errorf("failed to cast client to *lxd.ProtocolLXD")
 	}
 
-	resultCh := make(chan resultConnectLXD, 1)
-	go func() {
-		args := &lxd.ConnectionArgs{
-			UserAgent:          "shoes-lxd",
-			TLSClientCert:      clientCert,
-			TLSClientKey:       clientKey,
-			InsecureSkipVerify: true,
-		}
+	// Reset context (remove timeout)
+	c.WithContext(context.Background())
 
-		client, err := lxd.ConnectLXD(host, args)
-		resultCh <- resultConnectLXD{
-			client: client,
-			err:    err,
-		}
-	}()
+	storeConnectedInstance(host, c)
+	return c, nil
 
-	select {
-	case result := <-resultCh:
-		if result.err != nil {
-			return nil, fmt.Errorf("failed to connect LXD: %w", result.err)
-		}
-
-		storeConnectedInstance(host, result.client)
-
-		return &result.client, nil
-	case <-time.After(2 * time.Second):
-		// lxd.ConnectLXD() is not support context.Context yet. need to refactor it after support context.Context.
-		return nil, ErrTimeoutConnectLXD
-	}
 }
 
 // connectedInstances is map of connected LXD instances
@@ -133,19 +128,19 @@ func ConnectLXDWithTimeout(host, clientCert, clientKey string) (*lxd.InstanceSer
 var connectedInstances sync.Map
 
 // storeConnectedInstance store connected instance
-func storeConnectedInstance(host string, lh lxd.InstanceServer) {
+func storeConnectedInstance(host string, lh *lxd.ProtocolLXD) {
 	connectedInstances.Store(host, lh)
 }
 
 // loadConnectedInstance load connected instance
-func loadConnectedInstance(host string) (*lxd.InstanceServer, bool) {
+func loadConnectedInstance(host string) (*lxd.ProtocolLXD, bool) {
 	v, ok := connectedInstances.Load(host)
 	if !ok {
 		return nil, false
 	}
-	i := v.(lxd.InstanceServer)
+	i := v.(*lxd.ProtocolLXD)
 
-	return &i, true
+	return i, true
 }
 
 // deleteConnectedInstance delete connected instance
