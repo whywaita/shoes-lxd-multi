@@ -4,7 +4,7 @@ go 1.23
 
 require (
 	github.com/docker/go-units v0.5.0
-	github.com/lxc/lxd v0.0.0-20211202222358-a293da71aeb0
+	github.com/lxc/lxd v0.0.0-20220311035220-70d80f0252fc
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/prometheus/client_golang v1.20.5
 	github.com/whywaita/myshoes v1.18.1
@@ -14,6 +14,8 @@ require (
 	google.golang.org/grpc v1.70.0
 )
 
+replace google.golang.org/grpc/naming => google.golang.org/grpc v1.29.1
+
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bradleyfalzon/ghinstallation/v2 v2.13.0 // indirect
@@ -21,6 +23,7 @@ require (
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/flosch/pongo2 v0.0.0-20200913210552-0d938eb266f3 // indirect
 	github.com/go-macaroon-bakery/macaroonpb v1.0.0 // indirect
+	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.1 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/go-github/v47 v47.1.0 // indirect
@@ -36,13 +39,14 @@ require (
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
+	github.com/kr/fs v0.1.0 // indirect
 	github.com/m4ns0ur/httpcache v0.0.0-20200426190423-1040e2e8823f // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/pborman/uuid v1.2.1 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pkg/sftp v1.13.4 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
@@ -59,6 +63,7 @@ require (
 	google.golang.org/protobuf v1.36.4 // indirect
 	gopkg.in/errgo.v1 v1.0.1 // indirect
 	gopkg.in/httprequest.v1 v1.2.1 // indirect
+	gopkg.in/inconshreveable/log15.v2 v2.0.0-20200109203555-b30bc20e4fd1 // indirect
 	gopkg.in/macaroon-bakery.v2 v2.3.0 // indirect
 	gopkg.in/macaroon.v2 v2.1.0 // indirect
 )

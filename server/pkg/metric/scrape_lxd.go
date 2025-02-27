@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/docker/go-units"
 	"github.com/prometheus/client_golang/prometheus"
@@ -73,7 +74,7 @@ func (ScraperLXD) Scrape(ctx context.Context, hostConfigs []config.HostConfig, c
 
 func scrapeLXDHosts(ctx context.Context, hostConfigs []config.HostConfig, ch chan<- prometheus.Metric) error {
 	l := slog.With("method", "scrapeLXDHosts")
-	hosts, errHosts, err := lxdclient.ConnectLXDs(hostConfigs)
+	hosts, errHosts, err := lxdclient.ConnectLXDs(ctx, hostConfigs)
 	if err != nil {
 		return fmt.Errorf("failed to connect LXD hosts: %w", err)
 	}
@@ -105,7 +106,9 @@ func scrapeLXDHosts(ctx context.Context, hostConfigs []config.HostConfig, ch cha
 }
 
 func scrapeLXDHost(ctx context.Context, host lxdclient.LXDHost, ch chan<- prometheus.Metric, logger *slog.Logger) error {
-	resources, hostname, err := lxdclient.GetResourceFromLXDWithClient(ctx, host.Client, host.HostConfig.LxdHost, logger)
+	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	resources, hostname, err := lxdclient.GetResourceFromLXDWithClient(cctx, host.Client, host.HostConfig.LxdHost, logger)
 	if err != nil {
 		return fmt.Errorf("failed to get resource from lxd: %w", err)
 	}
