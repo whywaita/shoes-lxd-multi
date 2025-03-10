@@ -86,6 +86,9 @@ func GetResourceFromLXD(ctx context.Context, hostConfig config.HostConfig, logge
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get resource from lxd: %w", err)
 	}
+
+	client.WithContext(context.Background())
+
 	return r, hostname, nil
 }
 
@@ -122,6 +125,8 @@ func GetResourceFromLXDWithClient(ctx context.Context, client lxd.InstanceServer
 		CPUUsed:     cpuUsed,
 		MemoryUsed:  memoryUsed,
 	}
+
+	c.WithContext(context.Background())
 
 	return &r, hostname, nil
 }
