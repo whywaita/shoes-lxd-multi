@@ -187,6 +187,8 @@ func allocatePooledInstance(ctx context.Context, targets []*lxdclient.LXDHost, r
 }
 
 func allocateInstance(host *lxdclient.LXDHost, instanceName, runnerName string, l *slog.Logger) error {
+	host.APICallMutex.Lock()
+	defer host.APICallMutex.Unlock()
 	i, etag, err := host.Client.GetInstance(instanceName)
 	if err != nil {
 		return fmt.Errorf("get instance: %w", err)
