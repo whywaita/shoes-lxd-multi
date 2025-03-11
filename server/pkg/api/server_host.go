@@ -18,13 +18,13 @@ var (
 )
 
 // isExistInstance search created instance in same name
-func (s *ShoesLXDMultiServer) isExistInstance(targetLXDHosts []lxdclient.LXDHost, instanceName string, logger *slog.Logger) (*lxdclient.LXDHost, error) {
+func (s *ShoesLXDMultiServer) isExistInstance(targetLXDHosts []*lxdclient.LXDHost, instanceName string, logger *slog.Logger) (*lxdclient.LXDHost, error) {
 	eg := errgroup.Group{}
 	var foundHost *lxdclient.LXDHost
 	foundHost = nil
 
 	for _, host := range targetLXDHosts {
-		func(host lxdclient.LXDHost) {
+		func(host *lxdclient.LXDHost) {
 			eg.Go(func() error {
 				l := logger.With("host", host.HostConfig.LxdHost)
 				err := isExistInstanceWithTimeout(host, instanceName)
@@ -42,7 +42,7 @@ func (s *ShoesLXDMultiServer) isExistInstance(targetLXDHosts []lxdclient.LXDHost
 					}
 				}
 
-				foundHost = &host
+				foundHost = host
 				return nil
 			})
 		}(host)
@@ -63,7 +63,7 @@ var (
 	ErrTimeoutGetInstance = fmt.Errorf("timeout of GetInstance")
 )
 
-func isExistInstanceWithTimeout(targetLXDHost lxdclient.LXDHost, instanceName string) error {
+func isExistInstanceWithTimeout(targetLXDHost *lxdclient.LXDHost, instanceName string) error {
 	errCh := make(chan error, 1)
 	go func() {
 		_, _, err := targetLXDHost.Client.GetInstance(instanceName)
