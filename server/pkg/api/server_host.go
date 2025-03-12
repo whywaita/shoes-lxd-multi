@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -64,26 +65,28 @@ var (
 )
 
 func isExistInstanceWithTimeout(targetLXDHost *lxdclient.LXDHost, instanceName string) error {
-	errCh := make(chan error, 1)
-	go func() {
-		_, _, err := targetLXDHost.Client.GetInstance(instanceName)
-		errCh <- err
-	}()
+	cctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 
-	select {
-	case err := <-errCh:
-		if err != nil {
-			if strings.Contains(err.Error(), "Instance not found") {
-				return ErrInstanceIsNotFound
-			}
+	client := targetLXDHost.Client
+	c := client.WithContext(cctx)
 
-			return fmt.Errorf("failed to found instance: %w", err)
+	targetLXDHost.APICallMutex.Lock()
+	defer targetLXDHost.APICallMutex.Unlock()
+
+	_, _, err := c.GetInstance(instanceName)
+	if err != nil {
+		switch {
+		case strings.Contains(err.Error(), "Instance not found"):
+			return ErrInstanceIsNotFound
+		case errors.Is(err, context.DeadlineExceeded):
+			return ErrTimeoutGetInstance
 		}
-
-		// non-error, found
-		return nil
-	case <-time.After(2 * time.Second):
-		// lxd.GetInstance() is not support context.Context yet. need to refactor it after support context.Context.
-		return ErrTimeoutGetInstance
+		return fmt.Errorf("failed to found instance: %w", err)
 	}
+
+	// Reset context (remove timeout)
+	client.WithContext(context.Background())
+
+	return nil
 }
