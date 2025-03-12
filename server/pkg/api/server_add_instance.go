@@ -73,7 +73,7 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	}, nil
 }
 
-func (s *ShoesLXDMultiServer) addInstanceCreateMode(ctx context.Context, targetLXDHosts []lxdclient.LXDHost, req *pb.AddInstanceRequest, l *slog.Logger) (*lxdclient.LXDHost, string, error) {
+func (s *ShoesLXDMultiServer) addInstanceCreateMode(ctx context.Context, targetLXDHosts []*lxdclient.LXDHost, req *pb.AddInstanceRequest, l *slog.Logger) (*lxdclient.LXDHost, string, error) {
 	instanceName := req.RunnerName
 
 	instanceSource, err := ParseAlias(s.parseImageAliasMap(req.OsVersion))
@@ -114,7 +114,7 @@ func (s *ShoesLXDMultiServer) addInstanceCreateMode(ctx context.Context, targetL
 		if err != nil {
 			return nil, "", status.Errorf(codes.Internal, "failed to get created instance: %+v", err)
 		}
-		if err := s.setLXDStatusCache(reqInstance, *createdInstance, *scheduledHost); err != nil {
+		if err := s.setLXDStatusCache(reqInstance, *createdInstance, scheduledHost); err != nil {
 			return nil, "", status.Errorf(codes.Internal, "failed to set LXD status cache: %+v", err)
 		}
 		host = scheduledHost
@@ -156,7 +156,7 @@ func (s *ShoesLXDMultiServer) addInstanceCreateMode(ctx context.Context, targetL
 	return host, instanceName, nil
 }
 
-func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets []lxdclient.LXDHost, req *pb.AddInstanceRequest, _l *slog.Logger) (*lxdclient.LXDHost, string, error) {
+func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets []*lxdclient.LXDHost, req *pb.AddInstanceRequest, _l *slog.Logger) (*lxdclient.LXDHost, string, error) {
 	host, instanceName, found := findInstanceByJob(ctx, targets, req.RunnerName, _l)
 	if !found {
 		resourceTypeName := datastore.UnmarshalResourceTypePb(req.ResourceType).String()
@@ -224,7 +224,7 @@ func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets [
 func (s *ShoesLXDMultiServer) setLXDStatusCache(
 	reqInstance *api.InstancesPost,
 	newInstance api.Instance,
-	scheduledHost lxdclient.LXDHost,
+	scheduledHost *lxdclient.LXDHost,
 ) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -290,13 +290,13 @@ func (s *ShoesLXDMultiServer) getInstanceDevices() map[string]map[string]string 
 }
 
 type targetHost struct {
-	host     lxdclient.LXDHost
+	host     *lxdclient.LXDHost
 	resource lxdclient.Resource
 
 	percentOverCommit uint64
 }
 
-func (s *ShoesLXDMultiServer) scheduleHost(ctx context.Context, targetLXDHosts []lxdclient.LXDHost) (*lxdclient.LXDHost, error) {
+func (s *ShoesLXDMultiServer) scheduleHost(ctx context.Context, targetLXDHosts []*lxdclient.LXDHost) (*lxdclient.LXDHost, error) {
 	targets, err := getResources(ctx, targetLXDHosts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resources: %w", err)
@@ -306,11 +306,11 @@ func (s *ShoesLXDMultiServer) scheduleHost(ctx context.Context, targetLXDHosts [
 	if err != nil {
 		return nil, fmt.Errorf("failed to schedule: %w", err)
 	}
-	return &(target.host), nil
+	return target.host, nil
 }
 
-func getResources(ctx context.Context, targetLXDHosts []lxdclient.LXDHost) ([]targetHost, error) {
-	var targets []targetHost
+func getResources(ctx context.Context, targetLXDHosts []*lxdclient.LXDHost) ([]*targetHost, error) {
+	var targets []*targetHost
 
 	eg := errgroup.Group{}
 	mu := sync.Mutex{}
@@ -326,7 +326,7 @@ func getResources(ctx context.Context, targetLXDHosts []lxdclient.LXDHost) ([]ta
 			}
 
 			mu.Lock()
-			targets = append(targets, targetHost{
+			targets = append(targets, &targetHost{
 				host:              t,
 				resource:          *resources,
 				percentOverCommit: lxdclient.GetCPUOverCommitPercent(*resources),
@@ -349,8 +349,8 @@ var (
 	ErrNoValidHost = fmt.Errorf("no valid host in targets")
 )
 
-func schedule(targets []targetHost, limitOverCommit uint64) (*targetHost, error) {
-	var schedulableTargets []targetHost
+func schedule(targets []*targetHost, limitOverCommit uint64) (*targetHost, error) {
+	var schedulableTargets []*targetHost
 	for _, target := range targets {
 		l := slog.With("host", target.host.HostConfig.LxdHost)
 		if target.percentOverCommit < limitOverCommit {
@@ -363,7 +363,7 @@ func schedule(targets []targetHost, limitOverCommit uint64) (*targetHost, error)
 		return nil, ErrNoValidHost
 	}
 
-	return &schedulableTargets[rand.Intn(len(schedulableTargets))], nil
+	return schedulableTargets[rand.Intn(len(schedulableTargets))], nil
 }
 
 // ParseAlias parse user input

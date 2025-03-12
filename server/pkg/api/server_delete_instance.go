@@ -33,6 +33,8 @@ func (s *ShoesLXDMultiServer) DeleteInstance(ctx context.Context, req *pb.Delete
 		}
 	}
 
+	l = l.With("host", host.HostConfig.LxdHost)
+
 	l.Info("will stop instance")
 	client := host.Client
 	reqState := api.InstanceStatePut{
@@ -56,7 +58,7 @@ func (s *ShoesLXDMultiServer) DeleteInstance(ctx context.Context, req *pb.Delete
 		return nil, status.Errorf(codes.Internal, "failed to wait deleting instance: %+v", err)
 	}
 
-	l.Info("Success DeleteInstance", "host", host.HostConfig.LxdHost)
+	l.Info("Success DeleteInstance")
 
 	return &pb.DeleteInstanceResponse{}, nil
 }

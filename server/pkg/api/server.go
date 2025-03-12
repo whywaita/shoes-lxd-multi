@@ -57,7 +57,7 @@ func (s *ShoesLXDMultiServer) Run(listenPort int) error {
 	return nil
 }
 
-func (s *ShoesLXDMultiServer) validateTargetHosts(ctx context.Context, targetHosts []string, logger *slog.Logger) ([]lxdclient.LXDHost, error) {
+func (s *ShoesLXDMultiServer) validateTargetHosts(ctx context.Context, targetHosts []string, logger *slog.Logger) ([]*lxdclient.LXDHost, error) {
 	var hostConfigs []config.HostConfig
 
 	for _, target := range targetHosts {
