@@ -188,19 +188,18 @@ func (a *Agent) Run(ctx context.Context, sigHupCh chan os.Signal) error {
 	}
 }
 
-func (a *Agent) countPooledInstances(instances []api.Instance, resourceTypeName, version string) int {
+func (a *Agent) countPooledInstances(instances []api.Instance, resourceTypeName, imageAlias string) int {
 	count := 0
 	for _, i := range instances {
 		if i.StatusCode != api.Frozen {
-			continue
+			if i.StatusCode != api.Running {
+				continue
+			}
 		}
 		if i.Config[configKeyResourceType] != resourceTypeName {
 			continue
 		}
-		if i.Config[configKeyImageAlias] != a.Image[version].config.ImageAlias {
-			continue
-		}
-		if _, ok := i.Config[configKeyRunnerName]; ok {
+		if i.Config[configKeyImageAlias] != imageAlias {
 			continue
 		}
 		count++
@@ -228,7 +227,7 @@ func (a *Agent) adjustInstancePool() error {
 	for version, image := range a.Image {
 		toDelete := []string{}
 		for rtName, rt := range a.ResourceTypesMap {
-			current := a.countPooledInstances(s, rtName, version)
+			current := a.countPooledInstances(s, rtName, image.config.ImageAlias)
 			creating := len(image.status.creatingInstances[rtName])
 			rtCount, ok := image.config.ResourceTypesCounts[rtName]
 			if !ok {
