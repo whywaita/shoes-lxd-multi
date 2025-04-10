@@ -73,19 +73,25 @@ func GetResource(ctx context.Context, hostConfig config.HostConfig, logger *slog
 
 // GetResourceFromLXD get resources from LXD API
 func GetResourceFromLXD(ctx context.Context, hostConfig config.HostConfig, logger *slog.Logger) (*Resource, string, error) {
-	client, err := ConnectLXDWithTimeout(ctx, hostConfig.LxdHost, hostConfig.LxdClientCert, hostConfig.LxdClientKey)
+	host, err := ConnectLXDWithTimeout(ctx, hostConfig.LxdHost, hostConfig.LxdClientCert, hostConfig.LxdClientKey)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to connect lxd: %w", err)
 	}
 
 	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	c := client.WithContext(cctx)
+	c := host.Client.WithContext(cctx)
+
+	host.APICallMutex.Lock()
+	defer host.APICallMutex.Unlock()
 
 	r, hostname, err := GetResourceFromLXDWithClient(cctx, c, hostConfig.LxdHost, logger)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get resource from lxd: %w", err)
 	}
+
+	host.Client.WithContext(context.Background())
+
 	return r, hostname, nil
 }
 
@@ -122,6 +128,8 @@ func GetResourceFromLXDWithClient(ctx context.Context, client lxd.InstanceServer
 		CPUUsed:     cpuUsed,
 		MemoryUsed:  memoryUsed,
 	}
+
+	c.WithContext(context.Background())
 
 	return &r, hostname, nil
 }

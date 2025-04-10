@@ -24,7 +24,7 @@ type gotInstances struct {
 	Error             error
 }
 
-func getInstancesWithTimeout(_ctx context.Context, h lxdclient.LXDHost, d time.Duration, l *slog.Logger) ([]api.Instance, uint64, error) {
+func getInstancesWithTimeout(_ctx context.Context, h *lxdclient.LXDHost, d time.Duration, l *slog.Logger) ([]api.Instance, uint64, error) {
 	ret := make(chan *gotInstances)
 	ctx, cancel := context.WithTimeout(_ctx, d)
 	defer cancel()
@@ -82,7 +82,7 @@ type instance struct {
 	InstanceName string
 }
 
-func findInstances(ctx context.Context, targets []lxdclient.LXDHost, match func(api.Instance) bool, limitOverCommit uint64, l *slog.Logger) []instance {
+func findInstances(ctx context.Context, targets []*lxdclient.LXDHost, match func(api.Instance) bool, limitOverCommit uint64, l *slog.Logger) []instance {
 	type result struct {
 		host              *lxdclient.LXDHost
 		overCommitPercent uint64
@@ -94,7 +94,7 @@ func findInstances(ctx context.Context, targets []lxdclient.LXDHost, match func(
 	for i, target := range targets {
 		wg.Add(1)
 		l := l.With("host", target.HostConfig.LxdHost)
-		go func(i int, target lxdclient.LXDHost) {
+		go func(i int, target *lxdclient.LXDHost) {
 			defer wg.Done()
 
 			s, overCommitPercent, err := getInstancesWithTimeout(ctx, target, 10*time.Second, l)
@@ -120,7 +120,7 @@ func findInstances(ctx context.Context, targets []lxdclient.LXDHost, match func(
 			})
 
 			rs[i] = result{
-				host:              &target,
+				host:              target,
 				overCommitPercent: overCommitPercent,
 				instances:         instances,
 			}
@@ -145,7 +145,7 @@ func findInstances(ctx context.Context, targets []lxdclient.LXDHost, match func(
 	return instances
 }
 
-func findInstanceByJob(ctx context.Context, targets []lxdclient.LXDHost, runnerName string, l *slog.Logger) (*lxdclient.LXDHost, string, bool) {
+func findInstanceByJob(ctx context.Context, targets []*lxdclient.LXDHost, runnerName string, l *slog.Logger) (*lxdclient.LXDHost, string, bool) {
 	s := findInstances(ctx, targets, func(i api.Instance) bool {
 		return i.Config[lxdclient.ConfigKeyRunnerName] == runnerName && i.StatusCode == api.Frozen
 	}, 0, l)
@@ -155,7 +155,7 @@ func findInstanceByJob(ctx context.Context, targets []lxdclient.LXDHost, runnerN
 	return s[0].Host, s[0].InstanceName, true
 }
 
-func allocatePooledInstance(ctx context.Context, targets []lxdclient.LXDHost, resourceType, imageAlias string, limitOverCommit uint64, runnerName string, l *slog.Logger) (*lxdclient.LXDHost, string, error) {
+func allocatePooledInstance(ctx context.Context, targets []*lxdclient.LXDHost, resourceType, imageAlias string, limitOverCommit uint64, runnerName string, l *slog.Logger) (*lxdclient.LXDHost, string, error) {
 	s := findInstances(ctx, targets, func(i api.Instance) bool {
 		if i.StatusCode != api.Frozen {
 			return false
@@ -187,6 +187,8 @@ func allocatePooledInstance(ctx context.Context, targets []lxdclient.LXDHost, re
 }
 
 func allocateInstance(host *lxdclient.LXDHost, instanceName, runnerName string, l *slog.Logger) error {
+	host.APICallMutex.Lock()
+	defer host.APICallMutex.Unlock()
 	i, etag, err := host.Client.GetInstance(instanceName)
 	if err != nil {
 		return fmt.Errorf("get instance: %w", err)

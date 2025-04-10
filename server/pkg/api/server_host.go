@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -18,13 +19,13 @@ var (
 )
 
 // isExistInstance search created instance in same name
-func (s *ShoesLXDMultiServer) isExistInstance(targetLXDHosts []lxdclient.LXDHost, instanceName string, logger *slog.Logger) (*lxdclient.LXDHost, error) {
+func (s *ShoesLXDMultiServer) isExistInstance(targetLXDHosts []*lxdclient.LXDHost, instanceName string, logger *slog.Logger) (*lxdclient.LXDHost, error) {
 	eg := errgroup.Group{}
 	var foundHost *lxdclient.LXDHost
 	foundHost = nil
 
 	for _, host := range targetLXDHosts {
-		func(host lxdclient.LXDHost) {
+		func(host *lxdclient.LXDHost) {
 			eg.Go(func() error {
 				l := logger.With("host", host.HostConfig.LxdHost)
 				err := isExistInstanceWithTimeout(host, instanceName)
@@ -42,7 +43,7 @@ func (s *ShoesLXDMultiServer) isExistInstance(targetLXDHosts []lxdclient.LXDHost
 					}
 				}
 
-				foundHost = &host
+				foundHost = host
 				return nil
 			})
 		}(host)
@@ -63,27 +64,29 @@ var (
 	ErrTimeoutGetInstance = fmt.Errorf("timeout of GetInstance")
 )
 
-func isExistInstanceWithTimeout(targetLXDHost lxdclient.LXDHost, instanceName string) error {
-	errCh := make(chan error, 1)
-	go func() {
-		_, _, err := targetLXDHost.Client.GetInstance(instanceName)
-		errCh <- err
-	}()
+func isExistInstanceWithTimeout(targetLXDHost *lxdclient.LXDHost, instanceName string) error {
+	cctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 
-	select {
-	case err := <-errCh:
-		if err != nil {
-			if strings.Contains(err.Error(), "Instance not found") {
-				return ErrInstanceIsNotFound
-			}
+	client := targetLXDHost.Client
+	c := client.WithContext(cctx)
 
-			return fmt.Errorf("failed to found instance: %w", err)
+	targetLXDHost.APICallMutex.Lock()
+	defer targetLXDHost.APICallMutex.Unlock()
+
+	_, _, err := c.GetInstance(instanceName)
+	if err != nil {
+		switch {
+		case strings.Contains(err.Error(), "Instance not found"):
+			return ErrInstanceIsNotFound
+		case errors.Is(err, context.DeadlineExceeded):
+			return ErrTimeoutGetInstance
 		}
-
-		// non-error, found
-		return nil
-	case <-time.After(2 * time.Second):
-		// lxd.GetInstance() is not support context.Context yet. need to refactor it after support context.Context.
-		return ErrTimeoutGetInstance
+		return fmt.Errorf("failed to found instance: %w", err)
 	}
+
+	// Reset context (remove timeout)
+	client.WithContext(context.Background())
+
+	return nil
 }

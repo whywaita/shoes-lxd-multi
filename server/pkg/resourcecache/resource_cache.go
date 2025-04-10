@@ -33,7 +33,7 @@ func reloadLXDHostResourceCache(ctx context.Context, hcs []config.HostConfig) er
 
 	for _, host := range hosts {
 		_l := l.With("host", host.HostConfig.LxdHost)
-		if err := setLXDHostResourceCache(ctx, &host, _l); err != nil {
+		if err := setLXDHostResourceCache(ctx, host, _l); err != nil {
 			_l.Warn("failed to set lxd host resource cache", "err", err.Error())
 			continue
 		}
