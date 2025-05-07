@@ -191,10 +191,8 @@ func (a *Agent) Run(ctx context.Context, sigHupCh chan os.Signal) error {
 func (a *Agent) countPooledInstances(instances []api.Instance, resourceTypeName, imageAlias string) int {
 	count := 0
 	for _, i := range instances {
-		if i.StatusCode != api.Frozen {
-			if i.StatusCode != api.Running {
-				continue
-			}
+		if !(i.StatusCode == api.Frozen || i.StatusCode == api.Running) {
+			continue
 		}
 		if i.Config[configKeyResourceType] != resourceTypeName {
 			continue
