@@ -188,21 +188,27 @@ func (a *Agent) Run(ctx context.Context, sigHupCh chan os.Signal) error {
 	}
 }
 
-func (a *Agent) countPooledInstances(instances []api.Instance, resourceTypeName, imageAlias string) int {
+func countPooledInstances(instances []api.Instance, resourceTypeName, imageAlias string) int {
 	count := 0
 	for _, i := range instances {
-		if !(i.StatusCode == api.Frozen || i.StatusCode == api.Running) {
-			continue
+		if isPooledInstance(i, resourceTypeName, imageAlias) {
+			count++
 		}
-		if i.Config[configKeyResourceType] != resourceTypeName {
-			continue
-		}
-		if i.Config[configKeyImageAlias] != imageAlias {
-			continue
-		}
-		count++
 	}
 	return count
+}
+
+func isPooledInstance(i api.Instance, resourceTypeName, imageAlias string) bool {
+	if !(i.StatusCode == api.Frozen || i.StatusCode == api.Running) {
+		return false
+	}
+	if i.Config[configKeyResourceType] != resourceTypeName {
+		return false
+	}
+	if i.Config[configKeyImageAlias] != imageAlias {
+		return false
+	}
+	return true
 }
 
 func generateInstanceName() (string, error) {
@@ -225,7 +231,7 @@ func (a *Agent) adjustInstancePool() error {
 	for version, image := range a.Image {
 		toDelete := []string{}
 		for rtName, rt := range a.ResourceTypesMap {
-			current := a.countPooledInstances(s, rtName, image.config.ImageAlias)
+			current := countPooledInstances(s, rtName, image.config.ImageAlias)
 			creating := len(image.status.creatingInstances[rtName])
 			rtCount, ok := image.config.ResourceTypesCounts[rtName]
 			if !ok {
