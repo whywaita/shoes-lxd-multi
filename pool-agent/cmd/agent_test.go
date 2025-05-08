@@ -112,31 +112,31 @@ func (s *AgentSuite) TestCalculateToDeleteInstances() {
 	tests := []struct {
 		name             string
 		resourceTypeName string
-		version          string
+		imageKey         string
 		want             bool
 	}{
 		{
 			name:             "typeA - focal",
 			resourceTypeName: "typeA",
-			version:          "focal",
+			imageKey:         "focal",
 			want:             false,
 		},
 		{
 			name:             "typeB - focal",
 			resourceTypeName: "typeB",
-			version:          "focal",
+			imageKey:         "focal",
 			want:             false,
 		},
 		{
 			name:             "typeC - focal",
 			resourceTypeName: "typeC",
-			version:          "focal",
+			imageKey:         "focal",
 			want:             true,
 		},
 		{
 			name:             "typeD - focal - not configured",
 			resourceTypeName: "typeD",
-			version:          "focal",
+			imageKey:         "focal",
 			want:             true,
 		},
 	}
@@ -144,12 +144,12 @@ func (s *AgentSuite) TestCalculateToDeleteInstances() {
 	s.Require().NoError(err)
 	for _, tt := range tests {
 		disabledResourceTypes := []string{}
-		_, ok := s.agent.CalculateCreateCount(instances, tt.resourceTypeName, tt.version)
+		_, ok := s.agent.CalculateCreateCount(instances, tt.resourceTypeName, tt.imageKey)
 		if !ok {
 			disabledResourceTypes = append(disabledResourceTypes, tt.resourceTypeName)
 		}
 		s.Run(tt.name, func() {
-			toDelete := s.agent.CalculateToDeleteInstances(instances, disabledResourceTypes, tt.version)
+			toDelete := s.agent.CalculateToDeleteInstances(instances, disabledResourceTypes, tt.imageKey)
 			s.Equal(tt.want, len(toDelete) > 0)
 		})
 	}
@@ -159,49 +159,49 @@ func (s *AgentSuite) TestCalculateCreateCount() {
 	tests := []struct {
 		name             string
 		resourceTypeName string
-		version          string
+		imageKey         string
 		want1            int
 		want2            bool
 	}{
 		{
 			name:             "typeA - focal not enough",
 			resourceTypeName: "typeA",
-			version:          "focal",
+			imageKey:         "focal",
 			want1:            1,
 			want2:            true,
 		},
 		{
 			name:             "typeB - focal already created",
 			resourceTypeName: "typeB",
-			version:          "focal",
+			imageKey:         "focal",
 			want1:            0,
 			want2:            true,
 		},
 		{
 			name:             "typeC - focal disabled",
 			resourceTypeName: "typeC",
-			version:          "focal",
+			imageKey:         "focal",
 			want1:            0,
 			want2:            false,
 		},
 		{
 			name:             "typeA - noble not enough",
 			resourceTypeName: "typeA",
-			version:          "noble",
+			imageKey:         "noble",
 			want1:            2,
 			want2:            true,
 		},
 		{
 			name:             "typeB - noble disabled",
 			resourceTypeName: "typeB",
-			version:          "noble",
+			imageKey:         "noble",
 			want1:            0,
 			want2:            false,
 		},
 		{
 			name:             "typeC - noble not enough",
 			resourceTypeName: "typeC",
-			version:          "noble",
+			imageKey:         "noble",
 			want1:            1,
 			want2:            true,
 		},
@@ -210,7 +210,7 @@ func (s *AgentSuite) TestCalculateCreateCount() {
 		s.Run(tt.name, func() {
 			instances, err := s.agent.Client.GetInstances(api.InstanceTypeContainer)
 			s.Require().NoError(err)
-			count, ok := s.agent.CalculateCreateCount(instances, tt.resourceTypeName, tt.version)
+			count, ok := s.agent.CalculateCreateCount(instances, tt.resourceTypeName, tt.imageKey)
 			s.Equal(tt.want1, count)
 			s.Equal(tt.want2, ok)
 		})

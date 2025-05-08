@@ -215,10 +215,10 @@ func generateInstanceName() (string, error) {
 	return fmt.Sprintf("myshoes-runner-%x", b), nil
 }
 
-func (a *Agent) CalculateCreateCount(s []api.Instance, rtName string, version string) (int, bool) {
-	creating := len(a.Image[version].Status.CreatingInstances[rtName])
-	current := countPooledInstances(s, rtName, a.Image[version].Config.ImageAlias)
-	rtCount, ok := a.Image[version].Config.ResourceTypesCounts[rtName]
+func (a *Agent) CalculateCreateCount(s []api.Instance, rtName string, imageKey string) (int, bool) {
+	creating := len(a.Image[imageKey].Status.CreatingInstances[rtName])
+	current := countPooledInstances(s, rtName, a.Image[imageKey].Config.ImageAlias)
+	rtCount, ok := a.Image[imageKey].Config.ResourceTypesCounts[rtName]
 	if !ok || rtCount == 0 {
 		// resource type is not configured
 		return 0, false
@@ -227,18 +227,18 @@ func (a *Agent) CalculateCreateCount(s []api.Instance, rtName string, version st
 	return rtCount - current - creating, true
 }
 
-func (a *Agent) CalculateToDeleteInstances(s []api.Instance, disabledResourceTypes []string, version string) []api.Instance {
+func (a *Agent) CalculateToDeleteInstances(s []api.Instance, disabledResourceTypes []string, imageKey string) []api.Instance {
 	toDelete := []api.Instance{}
 	for _, i := range s {
-		if i.Config[configKeyResourceType] == "" || i.Config[configKeyImageAlias] != a.Image[version].Config.ImageAlias {
+		if i.Config[configKeyResourceType] == "" || i.Config[configKeyImageAlias] != a.Image[imageKey].Config.ImageAlias {
 			continue
 		}
-		l := slog.With(slog.String("instance", i.Name), slog.String("version", version))
-		if a.isZombieInstance(i, version) {
+		l := slog.With(slog.String("instance", i.Name), slog.String("imageKey", imageKey))
+		if a.isZombieInstance(i, imageKey) {
 			toDelete = append(toDelete, i)
 		}
 
-		if isOld, err := a.isOldImageInstance(i, version); err != nil {
+		if isOld, err := a.isOldImageInstance(i, imageKey); err != nil {
 			l.Error("failed to check old image instance", slog.String("err", err.Error()))
 		} else if isOld {
 			toDelete = append(toDelete, i)
@@ -263,18 +263,18 @@ func (a *Agent) adjustInstancePool() error {
 
 	createMap := make(map[string]map[string]int)
 	toDelete := []api.Instance{}
-	for version := range a.Image {
+	for imageKey := range a.Image {
 		disabledResourceTypes := []string{}
-		createMap[version] = make(map[string]int)
+		createMap[imageKey] = make(map[string]int)
 		for rtName := range a.ResourceTypesMap {
-			count, ok := a.CalculateCreateCount(s, rtName, version)
+			count, ok := a.CalculateCreateCount(s, rtName, imageKey)
 			if !ok {
 				disabledResourceTypes = append(disabledResourceTypes, rtName)
 				continue
 			}
-			createMap[version][rtName] = count
+			createMap[imageKey][rtName] = count
 		}
-		toDelete = append(toDelete, a.CalculateToDeleteInstances(s, disabledResourceTypes, version)...)
+		toDelete = append(toDelete, a.CalculateToDeleteInstances(s, disabledResourceTypes, imageKey)...)
 	}
 
 	a.deleteInstances(toDelete)
@@ -317,14 +317,14 @@ func (a *Agent) collectMetrics() error {
 	return nil
 }
 
-func (a *Agent) isZombieInstance(i api.Instance, version string) bool {
+func (a *Agent) isZombieInstance(i api.Instance, imageKey string) bool {
 	if i.StatusCode == api.Frozen {
 		return false
 	}
 	if _, ok := i.Config[configKeyRunnerName]; ok {
 		return false
 	}
-	if i.Config[configKeyImageAlias] != a.Image[version].Config.ImageAlias {
+	if i.Config[configKeyImageAlias] != a.Image[imageKey].Config.ImageAlias {
 		return false
 	}
 	if i.CreatedAt.Add(a.ZombieAllowTime).After(time.Now()) {
@@ -332,29 +332,29 @@ func (a *Agent) isZombieInstance(i api.Instance, version string) bool {
 	}
 	if rt, ok := i.Config[configKeyResourceType]; !ok {
 		return false
-	} else if _, ok := a.Image[version].Status.CreatingInstances[rt][i.Name]; ok {
+	} else if _, ok := a.Image[imageKey].Status.CreatingInstances[rt][i.Name]; ok {
 		return false
 	}
 	return true
 }
 
-func (a *Agent) isOldImageInstance(i api.Instance, version string) (bool, error) {
+func (a *Agent) isOldImageInstance(i api.Instance, imageKey string) (bool, error) {
 	baseImage, ok := i.Config["volatile.base_image"]
 	if !ok {
 		return false, errors.New("Failed to get volatile.base_image")
 	}
-	if i.Config[configKeyImageAlias] != a.Image[version].Config.ImageAlias {
+	if i.Config[configKeyImageAlias] != a.Image[imageKey].Config.ImageAlias {
 		return false, nil
 	}
-	if baseImage != a.Image[version].Status.CurrentImage.Hash {
-		if i.CreatedAt.Before(a.Image[version].Status.CurrentImage.CreatedAt) {
+	if baseImage != a.Image[imageKey].Status.CurrentImage.Hash {
+		if i.CreatedAt.Before(a.Image[imageKey].Status.CurrentImage.CreatedAt) {
 			if i.StatusCode == api.Frozen {
 				return true, nil
 			}
 			return false, nil
 		}
-		a.Image[version].Status.CurrentImage.Hash = baseImage
-		a.Image[version].Status.CurrentImage.CreatedAt = i.CreatedAt
+		a.Image[imageKey].Status.CurrentImage.Hash = baseImage
+		a.Image[imageKey].Status.CurrentImage.CreatedAt = i.CreatedAt
 		return false, nil
 	}
 	return false, nil

@@ -10,9 +10,9 @@ import (
 )
 
 func (a *Agent) createInstance(createMap map[string]map[string]int) {
-	for version, createCount := range createMap {
-		l := slog.With(slog.String("version", version))
-		_, ok := a.Image[version]
+	for imageKey, createCount := range createMap {
+		l := slog.With(slog.String("imageKey", imageKey))
+		_, ok := a.Image[imageKey]
 		if !ok {
 			l.Error("failed to get image")
 			continue
@@ -31,7 +31,7 @@ func (a *Agent) createInstance(createMap map[string]map[string]int) {
 					continue
 				}
 				lll := ll.With(slog.String("instance", iname))
-				a.Image[version].Status.CreatingInstances[rtName][iname] = struct{}{}
+				a.Image[imageKey].Status.CreatingInstances[rtName][iname] = struct{}{}
 				lll.Info("Creating instance")
 				op, err := a.Client.CreateInstance(api.InstancesPost{
 					Name: iname,
@@ -46,7 +46,7 @@ func (a *Agent) createInstance(createMap map[string]map[string]int) {
 								"lxc.cgroup.devices.allow = a",
 								"lxc.cap.drop=",
 							}, "\n"),
-							configKeyImageAlias:   a.Image[version].Config.ImageAlias,
+							configKeyImageAlias:   a.Image[imageKey].Config.ImageAlias,
 							configKeyResourceType: rtName,
 						},
 						Devices: map[string]map[string]string{
@@ -62,7 +62,7 @@ func (a *Agent) createInstance(createMap map[string]map[string]int) {
 							},
 						},
 					},
-					Source: a.Image[version].InstanceSource,
+					Source: a.Image[imageKey].InstanceSource,
 				})
 				if err != nil {
 					lll.Error("failed to create creating operation", slog.String("err", err.Error()))
@@ -143,7 +143,7 @@ func (a *Agent) createInstance(createMap map[string]map[string]int) {
 				}
 
 				lll.Info("Created instance successfully")
-				delete(a.Image[version].Status.CreatingInstances[rtName], iname)
+				delete(a.Image[imageKey].Status.CreatingInstances[rtName], iname)
 			}
 		}
 	}
