@@ -362,35 +362,37 @@ func (a *Agent) isOldImageInstance(i api.Instance, imageKey string) (bool, error
 
 func (a *Agent) deleteInstances(toDelete []api.Instance) {
 	for _, i := range toDelete {
-		l := slog.With(slog.String("instance", i.Name))
-		if _, ok := a.deletingInstances[i.Name]; ok {
-			l.Debug("Instance is already deleting")
-			continue
-		}
-		a.deletingInstances[i.Name] = struct{}{}
-		_, etag, err := a.Client.GetInstance(i.Name)
-		if err != nil {
-			l.Error("failed to get instance", slog.String("err", err.Error()))
-			continue
-		}
-		stopOp, err := a.Client.UpdateInstanceState(i.Name, api.InstanceStatePut{Action: "stop", Timeout: -1, Force: true}, etag)
-		if err != nil && err.Error() != errAlreadyStopped {
-			l.Error("failed to stop instance", slog.String("err", err.Error()))
-			continue
-		}
-		if err := stopOp.Wait(); err != nil && err.Error() != errAlreadyStopped {
-			l.Error("failed to stop instance operation", slog.String("err", err.Error()))
-			continue
-		}
-		deleteOp, err := a.Client.DeleteInstance(i.Name)
-		if err != nil {
-			l.Error("failed to delete instance", slog.String("err", err.Error()))
-			continue
-		}
-		if err := deleteOp.Wait(); err != nil {
-			l.Error("failed to delete instance operation", slog.String("err", err.Error()))
-			continue
-		}
-		delete(a.deletingInstances, i.Name)
+		func(i api.Instance) {
+			l := slog.With(slog.String("instance", i.Name))
+			if _, ok := a.deletingInstances[i.Name]; ok {
+				l.Debug("Instance is already deleting")
+				return
+			}
+			a.deletingInstances[i.Name] = struct{}{}
+			defer delete(a.deletingInstances, i.Name)
+			_, etag, err := a.Client.GetInstance(i.Name)
+			if err != nil {
+				l.Error("failed to get instance", slog.String("err", err.Error()))
+				return
+			}
+			stopOp, err := a.Client.UpdateInstanceState(i.Name, api.InstanceStatePut{Action: "stop", Timeout: -1, Force: true}, etag)
+			if err != nil && err.Error() != errAlreadyStopped {
+				l.Error("failed to stop instance", slog.String("err", err.Error()))
+				return
+			}
+			if err := stopOp.Wait(); err != nil && err.Error() != errAlreadyStopped {
+				l.Error("failed to stop instance operation", slog.String("err", err.Error()))
+				return
+			}
+			deleteOp, err := a.Client.DeleteInstance(i.Name)
+			if err != nil {
+				l.Error("failed to delete instance", slog.String("err", err.Error()))
+				return
+			}
+			if err := deleteOp.Wait(); err != nil {
+				l.Error("failed to delete instance operation", slog.String("err", err.Error()))
+				return
+			}
+		}(i)
 	}
 }
