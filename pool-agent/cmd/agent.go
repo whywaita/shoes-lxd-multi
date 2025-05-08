@@ -277,7 +277,7 @@ func (a *Agent) adjustInstancePool() error {
 		toDelete = append(toDelete, a.CalculateToDeleteInstances(s, disabledResourceTypes, version)...)
 	}
 
-	a.deleteInstance(toDelete)
+	a.deleteInstances(toDelete)
 
 	a.createInstance(createMap)
 
@@ -360,7 +360,7 @@ func (a *Agent) isOldImageInstance(i api.Instance, version string) (bool, error)
 	return false, nil
 }
 
-func (a *Agent) deleteInstance(toDelete []api.Instance) {
+func (a *Agent) deleteInstances(toDelete []api.Instance) {
 	for _, i := range toDelete {
 		l := slog.With(slog.String("instance", i.Name))
 		if _, ok := a.deletingInstances[i.Name]; ok {
