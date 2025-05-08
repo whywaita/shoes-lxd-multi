@@ -24,7 +24,7 @@ func (a *Agent) createInstance(createMap map[string]map[string]int) {
 				ll.Error("failed to get resource type")
 				continue
 			}
-			for range count {
+			for i := 0; i < count; i++ {
 				iname, err := generateInstanceName()
 				if err != nil {
 					ll.Error("failed to generate instance name", slog.String("err", err.Error()))
