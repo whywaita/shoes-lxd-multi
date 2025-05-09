@@ -60,7 +60,7 @@ func (s *AgentSuite) SetupSuite() {
 			},
 		},
 	}
-	s.agent.Client.(*mockLxdClient).On("GetInstances", api.InstanceTypeContainer).Return([]api.Instance{
+	s.agent.Client.(*mockLxdClient).On("GetInstances", api.InstanceTypeAny).Return([]api.Instance{
 		{
 			Name:       "available_stock_running",
 			StatusCode: api.Running,
@@ -140,7 +140,7 @@ func (s *AgentSuite) TestCalculateToDeleteInstances() {
 			want:             true,
 		},
 	}
-	instances, err := s.agent.Client.GetInstances(api.InstanceTypeContainer)
+	instances, err := s.agent.Client.GetInstances(api.InstanceTypeAny)
 	s.Require().NoError(err)
 	for _, tt := range tests {
 		disabledResourceTypes := []string{}
@@ -148,9 +148,18 @@ func (s *AgentSuite) TestCalculateToDeleteInstances() {
 		if !ok {
 			disabledResourceTypes = append(disabledResourceTypes, tt.resourceTypeName)
 		}
+
 		s.Run(tt.name, func() {
-			toDelete := s.agent.CalculateToDeleteInstances(instances, disabledResourceTypes, tt.imageKey)
-			s.Equal(tt.want, len(toDelete) > 0)
+			filteredInstances := []api.Instance{}
+			for _, instance := range instances {
+				if instance.Config[cmd.ConfigKeyResourceType] != tt.resourceTypeName {
+					continue
+				}
+				filteredInstances = append(filteredInstances, instance)
+			}
+
+			toDeleteInstances := s.agent.CalculateToDeleteInstances(filteredInstances, disabledResourceTypes, tt.imageKey)
+			s.Assert().Equal(tt.want, len(toDeleteInstances) > 0)
 		})
 	}
 }
@@ -208,7 +217,7 @@ func (s *AgentSuite) TestCalculateCreateCount() {
 	}
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			instances, err := s.agent.Client.GetInstances(api.InstanceTypeContainer)
+			instances, err := s.agent.Client.GetInstances(api.InstanceTypeAny)
 			s.Require().NoError(err)
 			count, ok := s.agent.CalculateCreateCount(instances, tt.resourceTypeName, tt.imageKey)
 			s.Equal(tt.want1, count)
