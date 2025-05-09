@@ -321,7 +321,7 @@ func (a *Agent) isZombieInstance(i api.Instance, imageKey string) bool {
 	if i.StatusCode == api.Frozen {
 		return false
 	}
-	if _, ok := i.Config[configKeyRunnerName]; ok {
+	if name, ok := i.Config[configKeyRunnerName]; ok && name != "" {
 		return false
 	}
 	if i.Config[configKeyImageAlias] != a.Image[imageKey].Config.ImageAlias {
