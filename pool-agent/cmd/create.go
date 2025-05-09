@@ -9,7 +9,7 @@ import (
 	"github.com/lxc/lxd/shared/api"
 )
 
-func (a *Agent) createInstance(createMap map[string]map[string]int) {
+func (a *Agent) createInstances(createMap map[string]map[string]int) {
 	for imageKey, createCount := range createMap {
 		l := slog.With(slog.String("imageKey", imageKey))
 		_, ok := a.Image[imageKey]

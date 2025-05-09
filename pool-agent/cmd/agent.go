@@ -279,7 +279,7 @@ func (a *Agent) adjustInstancePool() error {
 
 	a.deleteInstances(toDelete)
 
-	a.createInstance(createMap)
+	a.createInstances(createMap)
 
 	return nil
 }
