@@ -236,17 +236,20 @@ func (a *Agent) CalculateToDeleteInstances(s []api.Instance, disabledResourceTyp
 		l := slog.With(slog.String("instance", i.Name), slog.String("imageKey", imageKey))
 		if a.isZombieInstance(i, imageKey) {
 			toDelete = append(toDelete, i)
+			continue
 		}
 
 		if isOld, err := a.isOldImageInstance(i, imageKey); err != nil {
 			l.Error("failed to check old image instance", slog.String("err", err.Error()))
 		} else if isOld {
 			toDelete = append(toDelete, i)
+			continue
 		}
 
 		for _, rtName := range disabledResourceTypes {
 			if i.Config[configKeyResourceType] == rtName {
 				toDelete = append(toDelete, i)
+				continue
 			}
 		}
 	}
