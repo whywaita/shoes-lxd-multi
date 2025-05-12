@@ -1,6 +1,7 @@
 package cmd_test
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -150,16 +151,10 @@ func (s *AgentSuite) TestCalculateToDeleteInstances() {
 		}
 
 		s.Run(tt.name, func() {
-			filteredInstances := []api.Instance{}
-			for _, instance := range instances {
-				if instance.Config[cmd.ConfigKeyResourceType] != tt.resourceTypeName {
-					continue
-				}
-				filteredInstances = append(filteredInstances, instance)
-			}
-
-			toDeleteInstances := s.agent.CalculateToDeleteInstances(filteredInstances, disabledResourceTypes, tt.imageKey)
-			s.Assert().Equal(tt.want, len(toDeleteInstances) > 0)
+			toDeleteInstances := s.agent.CalculateToDeleteInstances(instances, disabledResourceTypes, tt.imageKey)
+			s.Assert().Equal(tt.want, slices.ContainsFunc(toDeleteInstances, func(instance api.Instance) bool {
+				return tt.resourceTypeName == instance.Config[cmd.ConfigKeyResourceType] && s.agent.Image[tt.imageKey].Config.ImageAlias == instance.Config[cmd.ConfigKeyImageAlias]
+			}))
 		})
 	}
 }
