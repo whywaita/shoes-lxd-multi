@@ -110,50 +110,50 @@ func (s *AgentSuite) SetupSuite() {
 }
 
 func (s *AgentSuite) TestCalculateToDeleteInstances() {
-	tests := []struct {
-		name             string
-		resourceTypeName string
-		imageKey         string
-		want             bool
-	}{
-		{
-			name:             "typeA - focal",
-			resourceTypeName: "typeA",
-			imageKey:         "focal",
-			want:             false,
-		},
-		{
-			name:             "typeB - focal",
-			resourceTypeName: "typeB",
-			imageKey:         "focal",
-			want:             false,
-		},
-		{
-			name:             "typeC - focal",
-			resourceTypeName: "typeC",
-			imageKey:         "focal",
-			want:             true,
-		},
-		{
-			name:             "typeD - focal - not configured",
-			resourceTypeName: "typeD",
-			imageKey:         "focal",
-			want:             true,
-		},
-	}
 	instances, err := s.agent.Client.GetInstances(api.InstanceTypeAny)
 	s.Require().NoError(err)
-	for _, tt := range tests {
-		disabledResourceTypes := []string{}
-		_, ok := s.agent.CalculateCreateCount(instances, tt.resourceTypeName, tt.imageKey)
-		if !ok {
-			disabledResourceTypes = append(disabledResourceTypes, tt.resourceTypeName)
-		}
 
+	resourceTypes := s.agent.CollectResourceTypes(instances)
+
+	toDeleteInstances := []api.Instance{}
+
+	for imageKey := range s.agent.Image {
+		disabledResourceTypes := []string{}
+		for _, resourceTypeName := range resourceTypes {
+			_, ok := s.agent.CalculateCreateCount(instances, resourceTypeName, imageKey)
+			if !ok {
+				disabledResourceTypes = append(disabledResourceTypes, resourceTypeName)
+			}
+		}
+		toDeleteInstances = append(toDeleteInstances, s.agent.CalculateToDeleteInstances(instances, disabledResourceTypes, imageKey)...)
+	}
+
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{
+			name: "available_stock_running",
+			want: false,
+		},
+		{
+			name: "available_stock_frozen",
+			want: false,
+		},
+		{
+			name: "broken_running",
+			want: true,
+		},
+		{
+			name: "disabled_stock_frozen",
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			toDeleteInstances := s.agent.CalculateToDeleteInstances(instances, disabledResourceTypes, tt.imageKey)
 			s.Assert().Equal(tt.want, slices.ContainsFunc(toDeleteInstances, func(instance api.Instance) bool {
-				return tt.resourceTypeName == instance.Config[cmd.ConfigKeyResourceType] && s.agent.Image[tt.imageKey].Config.ImageAlias == instance.Config[cmd.ConfigKeyImageAlias]
+				return tt.name == instance.Name
 			}))
 		})
 	}
