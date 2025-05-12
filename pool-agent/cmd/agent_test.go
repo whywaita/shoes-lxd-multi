@@ -159,6 +159,33 @@ func (s *AgentSuite) TestCalculateToDeleteInstances() {
 	}
 }
 
+func (s *AgentSuite) TestCollectResourceTypes() {
+	instances, err := s.agent.Client.GetInstances(api.InstanceTypeAny)
+	s.Require().NoError(err)
+
+	resourceTypes := s.agent.CollectResourceTypes(instances)
+
+	tests := []struct {
+		name     string
+		resource string
+	}{
+		{
+			name:     "typeA",
+			resource: "typeA",
+		},
+		{
+			name:     "typeD - only in actual instances",
+			resource: "typeD",
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.Assert().Contains(resourceTypes, tt.resource)
+		})
+	}
+}
+
 func (s *AgentSuite) TestCalculateCreateCount() {
 	tests := []struct {
 		name             string

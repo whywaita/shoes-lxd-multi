@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
+	"slices"
 	"time"
 
 	lxd "github.com/lxc/lxd/client"
@@ -264,12 +266,14 @@ func (a *Agent) adjustInstancePool() error {
 		return fmt.Errorf("get instances: %w", err)
 	}
 
+	resourceTypes := a.CollectResourceTypes(s)
+
 	createMap := make(map[string]map[string]int)
 	toDelete := []api.Instance{}
 	for imageKey := range a.Image {
 		disabledResourceTypes := []string{}
 		createMap[imageKey] = make(map[string]int)
-		for rtName := range a.ResourceTypesMap {
+		for _, rtName := range resourceTypes {
 			count, ok := a.CalculateCreateCount(s, rtName, imageKey)
 			if !ok {
 				disabledResourceTypes = append(disabledResourceTypes, rtName)
@@ -285,6 +289,19 @@ func (a *Agent) adjustInstancePool() error {
 	a.createInstances(createMap)
 
 	return nil
+}
+
+func (a *Agent) CollectResourceTypes(s []api.Instance) []string {
+	resourceTypes := []string{}
+	for k := range a.Image {
+		resourceTypes = append(resourceTypes, slices.Collect(maps.Keys(a.Image[k].Config.ResourceTypesCounts))...)
+	}
+	for _, i := range s {
+		if !slices.Contains(resourceTypes, i.Config[configKeyResourceType]) {
+			resourceTypes = append(resourceTypes, i.Config[configKeyResourceType])
+		}
+	}
+	return resourceTypes
 }
 
 func (a *Agent) CollectMetrics(ctx context.Context) error {
