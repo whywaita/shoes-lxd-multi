@@ -45,13 +45,11 @@ func run() error {
 		Level:     slog.LevelInfo,
 	})))
 
-	// 環境変数からホストリストを取得（カンマ区切り）
 	hostConfig, err := serverconfig.LoadHostConfigs()
 	if err != nil {
 		return fmt.Errorf("failed to load host configs: %w", err)
 	}
 
-	// 環境変数からインターバル（秒）を取得
 	interval := 30 * time.Second
 	if intervalEnv := os.Getenv("LXD_MULTI_SCHEDULER_FETCH_INTERVAL_SECOND"); intervalEnv != "" {
 		if sec, err := time.ParseDuration(intervalEnv + "s"); err == nil {
