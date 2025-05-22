@@ -383,7 +383,8 @@ func (a *Agent) isOldImageInstance(i api.Instance, imageKey string) (bool, error
 func (a *Agent) deleteInstances(toDelete []api.Instance) {
 	for _, i := range toDelete {
 		func(i api.Instance) {
-			l := slog.With(slog.String("instance", i.Name))
+			l := slog.With(slog.String("instance", i.Name), slog.String("instance", i.Name))
+			l.Info("Deleting instance")
 			if _, ok := a.deletingInstances[i.Name]; ok {
 				l.Debug("Instance is already deleting")
 				return
@@ -413,6 +414,7 @@ func (a *Agent) deleteInstances(toDelete []api.Instance) {
 				l.Error("failed to delete instance operation", slog.String("err", err.Error()))
 				return
 			}
+			l.Info("Deleted instance")
 		}(i)
 	}
 }
