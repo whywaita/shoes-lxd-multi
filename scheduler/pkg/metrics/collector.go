@@ -92,6 +92,7 @@ type Scraper interface {
 func NewScrapers() []Scraper {
 	return []Scraper{
 		ScraperLXD{},
+		ScraperScheduler{},
 	}
 }
 

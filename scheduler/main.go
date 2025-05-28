@@ -11,8 +11,11 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/redis/go-redis/v9"
 	"github.com/whywaita/shoes-lxd-multi/scheduler/pkg/metrics"
 	"github.com/whywaita/shoes-lxd-multi/scheduler/pkg/scheduler"
+	"github.com/whywaita/shoes-lxd-multi/scheduler/pkg/storage"
+
 	serverconfig "github.com/whywaita/shoes-lxd-multi/server/pkg/config"
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
 )
@@ -57,8 +60,17 @@ func run() error {
 		}
 	}
 
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379"
+	}
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: redisAddr,
+	})
+	storageBackend := storage.NewRedisStorage(redisClient)
+
 	logger := slog.Default()
-	rm := scheduler.NewLXDResourceManager(hostConfig, interval, fetchResource, logger)
+	rm := scheduler.NewLXDResourceManager(hostConfig, interval, fetchResource, logger, storageBackend)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	rm.Start(ctx)

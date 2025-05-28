@@ -8,6 +8,7 @@ require (
 	github.com/docker/go-units v0.5.0
 	github.com/lxc/lxd v0.0.0-20220311035220-70d80f0252fc
 	github.com/prometheus/client_golang v1.22.0
+	github.com/redis/go-redis/v9 v9.8.0
 	github.com/whywaita/shoes-lxd-multi/server v0.0.0-20250410054654-76b500bb8ddd
 )
 
@@ -17,6 +18,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bradleyfalzon/ghinstallation/v2 v2.13.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/flosch/pongo2 v0.0.0-20200913210552-0d938eb266f3 // indirect
 	github.com/go-macaroon-bakery/macaroonpb v1.0.0 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect

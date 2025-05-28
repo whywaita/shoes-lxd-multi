@@ -83,7 +83,7 @@ func scrapeLXDHosts(ctx context.Context, rm *scheduler.LXDResourceManager, ch ch
 		return nil
 	}
 
-	resources := rm.GetResources()
+	resources := rm.GetResources(ctx)
 	if len(resources) == 0 {
 		l.Warn("no resources found")
 		return nil
