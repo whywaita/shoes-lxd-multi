@@ -7,6 +7,12 @@ on:
 jobs:
   docker-build-sha:
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - server
+          - scheduler
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,4 +42,4 @@ jobs:
         with:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          context: ./server
+          context: ./${{ matrix.target }}
