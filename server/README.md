@@ -33,9 +33,6 @@ Server-side implementation for shoes-lxd-multi
 - `LXD_MULTI_RESOURCE_CACHE_PERIOD_SEC`
     - Period of cache resource in seconds
     - default: `10`
-- `LXD_MULTI_MODE`
-    - Mode (`create` or `pool`)
-    - default: `create`
 - `LXD_MULTI_LOG_LEVEL`
     - Log level (`debug`, `info`, `warn`, `error`, `fatal`, `panic`) will set to `log/slog.Level`
     - default: `info`
