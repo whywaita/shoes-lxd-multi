@@ -42,7 +42,7 @@ type Mapping struct {
 
 // Load load config from Environment values
 func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, map[string]string, int64, int, uint64, *slog.Level, error) {
-	hostConfigs, err := loadHostConfigs()
+	hostConfigs, err := LoadHostConfigs()
 	if err != nil {
 		return nil, nil, nil, 0, -1, 0, nil, fmt.Errorf("failed to load host config: %w", err)
 	}
