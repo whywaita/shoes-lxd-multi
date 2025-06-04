@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	lxd "github.com/lxc/lxd/client"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 )
@@ -22,8 +23,12 @@ var agentRunCommand = &cobra.Command{
 		defer stop()
 		sigHupCh := make(chan os.Signal, 1)
 		signal.Notify(sigHupCh, syscall.SIGHUP)
+		c, err := lxd.ConnectLXDUnixWithContext(ctx, "", &lxd.ConnectionArgs{})
+		if err != nil {
+			return fmt.Errorf("connect lxd: %w", err)
+		}
 
-		agent, err := newAgent(ctx)
+		agent, err := newAgent(c)
 		if err != nil {
 			return err
 		}
