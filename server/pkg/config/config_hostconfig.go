@@ -60,7 +60,8 @@ type HostConfig struct {
 	LxdClientKey  string
 }
 
-func loadHostConfigs() (*HostConfigMap, error) {
+// LoadHostConfigs load host config from environment values
+func LoadHostConfigs() (*HostConfigMap, error) {
 	type multiNode struct {
 		IPAddress  string `json:"host"`
 		ClientCert string `json:"client_cert"`
