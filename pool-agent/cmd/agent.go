@@ -332,7 +332,7 @@ func (a *Agent) collectMetrics() error {
 	}
 	lxdInstances.Reset()
 	for _, i := range s {
-		lxdInstances.WithLabelValues(i.Status, i.Config[configKeyResourceType], i.Config[configKeyImageAlias], i.Name, i.Config[configKeyRunnerName]).Inc()
+		lxdInstances.WithLabelValues(i.Config[configKeyResourceType], i.Config[configKeyImageAlias], i.Name, i.Config[configKeyRunnerName]).Set(float64(containerStateFromString(i.Status)))
 	}
 	return nil
 }
