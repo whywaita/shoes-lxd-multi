@@ -31,6 +31,9 @@ const (
 
 	// EnvLXDImageAlias is old environment variable for image alias, for backward compatibility
 	EnvLXDImageAlias = "LXD_MULTI_IMAGE_ALIAS"
+
+	// EnvLXDSchedulerAddress is scheduler server address
+	EnvLXDSchedulerAddress = "LXD_MULTI_SCHEDULER_ADDRESS"
 )
 
 // Mapping is resource mapping
@@ -41,10 +44,10 @@ type Mapping struct {
 }
 
 // Load load config from Environment values
-func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, map[string]string, int64, int, uint64, *slog.Level, error) {
+func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, map[string]string, int64, int, uint64, *slog.Level, string, error) {
 	hostConfigs, err := LoadHostConfigs()
 	if err != nil {
-		return nil, nil, nil, 0, -1, 0, nil, fmt.Errorf("failed to load host config: %w", err)
+		return nil, nil, nil, 0, -1, 0, nil, "", fmt.Errorf("failed to load host config: %w", err)
 	}
 
 	envMappingJSON := os.Getenv(EnvLXDResourceTypeMapping)
@@ -52,7 +55,7 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, map[string]stri
 	if envMappingJSON != "" {
 		m, err = readResourceTypeMapping(envMappingJSON)
 		if err != nil {
-			return nil, nil, nil, 0, -1, 0, nil, fmt.Errorf("failed to read %s: %w", EnvLXDResourceTypeMapping, err)
+			return nil, nil, nil, 0, -1, 0, nil, "", fmt.Errorf("failed to read %s: %w", EnvLXDResourceTypeMapping, err)
 		}
 	}
 
@@ -60,15 +63,15 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, map[string]stri
 	var imageAliasMap map[string]string
 	if envImageAliasJSON != "" {
 		if err := json.Unmarshal([]byte(envImageAliasJSON), &imageAliasMap); err != nil {
-			return nil, nil, nil, 0, -1, 0, nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
+			return nil, nil, nil, 0, -1, 0, nil, "", fmt.Errorf("failed to unmarshal JSON: %w", err)
 		}
 		if _, ok := imageAliasMap["default"]; !ok {
-			return nil, nil, nil, 0, -1, 0, nil, fmt.Errorf("default image alias is required, actual: %v", imageAliasMap)
+			return nil, nil, nil, 0, -1, 0, nil, "", fmt.Errorf("default image alias is required, actual: %v", imageAliasMap)
 		}
 	} else {
 		imageAlias := os.Getenv(EnvLXDImageAlias)
 		if imageAlias == "" {
-			return nil, nil, nil, 0, -1, 0, nil, fmt.Errorf("%s or %s is required", EnvLXDImageAliasMapping, EnvLXDImageAlias)
+			return nil, nil, nil, 0, -1, 0, nil, "", fmt.Errorf("%s or %s is required", EnvLXDImageAliasMapping, EnvLXDImageAlias)
 		}
 		imageAliasMap = map[string]string{"default": imageAlias}
 	}
@@ -80,7 +83,7 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, map[string]stri
 	} else {
 		periodSec, err = strconv.ParseInt(envPeriodSec, 10, 64)
 		if err != nil {
-			return nil, nil, nil, 0, -1, 0, nil, fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
+			return nil, nil, nil, 0, -1, 0, nil, "", fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
 		}
 	}
 	log.Printf("periodSec: %d\n", periodSec)
@@ -92,7 +95,7 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, map[string]stri
 	} else {
 		port, err = strconv.Atoi(envPort)
 		if err != nil {
-			return nil, nil, nil, 0, -1, 0, nil, fmt.Errorf("failed to parse %s, need to int: %w", EnvPort, err)
+			return nil, nil, nil, 0, -1, 0, nil, "", fmt.Errorf("failed to parse %s, need to int: %w", EnvPort, err)
 		}
 	}
 
@@ -103,7 +106,7 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, map[string]stri
 	} else {
 		overCommitPercent, err = strconv.ParseUint(envOCP, 10, 64)
 		if err != nil {
-			return nil, nil, nil, 0, -1, 0, nil, fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
+			return nil, nil, nil, 0, -1, 0, nil, "", fmt.Errorf("failed to parse %s, need to uint: %w", EnvOverCommit, err)
 		}
 	}
 	log.Printf("overCommitPercent: %d\n", overCommitPercent)
@@ -114,10 +117,15 @@ func Load() (*HostConfigMap, map[myshoespb.ResourceType]Mapping, map[string]stri
 		inLogLevel = "INFO"
 	}
 	if err := level.UnmarshalText([]byte(inLogLevel)); err != nil {
-		return nil, nil, nil, 0, -1, 0, nil, fmt.Errorf("failed to parse log level (%s): %w", inLogLevel, err)
+		return nil, nil, nil, 0, -1, 0, nil, "", fmt.Errorf("failed to parse log level (%s): %w", inLogLevel, err)
 	}
 
-	return hostConfigs, m, imageAliasMap, periodSec, port, overCommitPercent, &level, nil
+	schedulerAddress := os.Getenv(EnvLXDSchedulerAddress)
+	if schedulerAddress == "" {
+		slog.Warn("scheduler address is not set, using default scheduler (very simple scheduler)")
+	}
+
+	return hostConfigs, m, imageAliasMap, periodSec, port, overCommitPercent, &level, schedulerAddress, nil
 }
 
 func readResourceTypeMapping(env string) (map[myshoespb.ResourceType]Mapping, error) {

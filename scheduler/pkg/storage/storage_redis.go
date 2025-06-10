@@ -85,13 +85,12 @@ func (s *RedisStorage) DeleteResource(ctx context.Context, id string) error {
 // ListResources retrieves all resources
 func (s *RedisStorage) ListResources(ctx context.Context) (map[string][]*Resource, error) {
 	pattern := resourceKey("*")
-	keys, err := s.client.Keys(ctx, pattern).Result()
-	if err != nil {
-		return nil, err
-	}
-
 	resources := make(map[string][]*Resource)
-	for _, key := range keys {
+	
+	// Use SCAN instead of KEYS for better performance
+	iter := s.client.Scan(ctx, 0, pattern, 0).Iterator()
+	for iter.Next(ctx) {
+		key := iter.Val()
 		id := idFromKey(key)
 		if id == "" {
 			continue
@@ -108,6 +107,10 @@ func (s *RedisStorage) ListResources(ctx context.Context) (map[string][]*Resourc
 		}
 
 		resources[id] = append(resources[id], &resource)
+	}
+	
+	if err := iter.Err(); err != nil {
+		return nil, err
 	}
 
 	return resources, nil

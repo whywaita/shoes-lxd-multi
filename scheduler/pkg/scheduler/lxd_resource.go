@@ -12,6 +12,11 @@ import (
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
 )
 
+const (
+	// ScheduledResourceCleanupThreshold is the duration for cleanup threshold of scheduled resources
+	ScheduledResourceCleanupThreshold = 2 * time.Minute
+)
+
 type LXDResourceManager struct {
 	hosts     *serverconfig.HostConfigMap
 	errorConn map[string]error // key: lxdAPIAddress, value: error of connect
@@ -177,7 +182,7 @@ func (m *LXDResourceManager) cleanupScheduledResources(ctx context.Context) {
 		// Check if there are any valid scheduled resources
 		validResources := []ScheduledResource{}
 		for _, sr := range schedList {
-			if now.Sub(sr.Time) < 2*time.Minute {
+			if now.Sub(sr.Time) < ScheduledResourceCleanupThreshold {
 				validResources = append(validResources, sr)
 			}
 		}
@@ -202,7 +207,7 @@ func (m *LXDResourceManager) cleanupScheduledResources(ctx context.Context) {
 				Status:    string(data),
 				CreatedAt: resourceList[0].CreatedAt,
 				UpdatedAt: now,
-			}, storage.ResourceTTL)
+			}, ScheduledResourceTTL)
 
 			if err != nil {
 				m.Logger.Error("failed to update scheduled resource during cleanup", "id", id, "err", err)

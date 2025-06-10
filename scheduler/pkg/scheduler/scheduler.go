@@ -15,6 +15,10 @@ const (
 	ScheduledResourceTTL = 2 * time.Minute
 	// ScheduledResourceFilterTTL is the duration used to filter out old scheduled resources
 	ScheduledResourceFilterTTL = 1 * time.Minute
+	// MaxSchedulingRetries is the maximum number of retries for resource scheduling
+	MaxSchedulingRetries = 3
+	// LockRetryDelay is the delay between lock acquisition retries
+	LockRetryDelay = 10 * time.Millisecond
 )
 
 // ScheduledResource represents a resource allocation created by scheduling
@@ -67,23 +71,43 @@ func (s *Scheduler) Schedule(ctx context.Context, req ScheduleRequest) (string, 
 		adjustedResources[lxdAPIAddress] = adjustedRes
 	}
 
-	// Try to get a lock for each resource to avoid race conditions
-	// but do not filter out resources that are already locked
-	// as they may still have capacity for additional workloads
-	selected, ok := Schedule(adjustedResources, req)
-	if !ok {
-		return "", false
-	}
+	// Try to schedule and acquire lock with retry logic
+	var selected string
+	var locked bool
+	for attempt := 0; attempt < MaxSchedulingRetries; attempt++ {
+		// Try to get a lock for each resource to avoid race conditions
+		// but do not filter out resources that are already locked
+		// as they may still have capacity for additional workloads
+		candidate, ok := Schedule(adjustedResources, req)
+		if !ok {
+			return "", false
+		}
 
-	// Lock the resource to prevent race conditions during allocation
-	locked, err := storageBackend.TryLock(ctx, selected)
-	if err != nil {
-		s.ResourceManager.Logger.Error("failed to acquire lock", "lxdAPIAddress", selected, "error", err)
-		return "", false
+		// Lock the resource to prevent race conditions during allocation
+		var err error
+		locked, err = storageBackend.TryLock(ctx, candidate)
+		if err != nil {
+			s.ResourceManager.Logger.Error("failed to acquire lock", "lxdAPIAddress", candidate, "error", err, "attempt", attempt+1)
+			if attempt < MaxSchedulingRetries-1 {
+				time.Sleep(LockRetryDelay)
+				continue
+			}
+			return "", false
+		}
+
+		if locked {
+			selected = candidate
+			break
+		}
+
+		s.ResourceManager.Logger.Info("resource locked during selection, retrying", "lxdAPIAddress", candidate, "attempt", attempt+1)
+		if attempt < MaxSchedulingRetries-1 {
+			time.Sleep(LockRetryDelay)
+		}
 	}
 
 	if !locked {
-		s.ResourceManager.Logger.Info("resource locked during final selection, trying again", "lxdAPIAddress", selected)
+		s.ResourceManager.Logger.Warn("failed to acquire lock after all retries", "maxRetries", MaxSchedulingRetries)
 		return "", false
 	}
 

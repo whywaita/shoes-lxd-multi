@@ -77,7 +77,6 @@ func run() error {
 
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(metrics.NewCollector(ctx, rm))
-	//registry.MustRegister(metrics.FailureCollec)
 	gatherers := prometheus.Gatherers{
 		prometheus.DefaultGatherer,
 		registry,
