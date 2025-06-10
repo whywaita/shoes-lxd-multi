@@ -11,8 +11,7 @@ RUN go build -o /go/src/github.com/whywaita/shoes-lxd-multi/scheduler/ .
 
 FROM alpine
 
-RUN apk update \
-  && apk update
+RUN apk update
 RUN apk add --no-cache ca-certificates \
   && update-ca-certificates 2>/dev/null || true
 

@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"math/rand"
 	"sort"
 	"time"
@@ -260,7 +261,7 @@ func Schedule(resources map[string]LXDResource, req ScheduleRequest) (string, bo
 
 	// 1. Filter host of fewest used resources
 	var filterMinUsedCore []resource
-	var minUsedCore uint64 = 1024 * 1024 * 1024 * 1024 // a very large number
+	var minUsedCore uint64 = math.MaxUint64 // a very large number
 	for _, r := range input {
 		switch {
 		case r.res.Resource.CPUUsed < minUsedCore:

@@ -66,23 +66,6 @@ func scrapeScheduler(ctx context.Context, rm *scheduler.LXDResourceManager, ch c
 	// Create a dummy scheduler to access scheduling data
 	s := &scheduler.Scheduler{ResourceManager: rm}
 
-	// // Get scheduled resources
-	// scheduledResources, err := s.GetScheduledResources(ctx)
-	// if err != nil {
-	// 	l.Error("failed to get scheduled resources", "error", err)
-	// 	return nil
-	// }
-
-	// // Report metrics about individual scheduled resources
-	// for lxdAPIAddress, scheduledList := range scheduledResources {
-	// 	for _, sr := range scheduledList {
-	// 		ch <- prometheus.MustNewConstMetric(
-	// 			schedulerScheduled, prometheus.GaugeValue, 1,
-	// 			lxdAPIAddress, fmt.Sprintf("%d", sr.CPU), fmt.Sprintf("%d", sr.Memory),
-	// 		)
-	// 	}
-	// }
-
 	// Get and report aggregated stats
 	stats, err := s.GetScheduledResourceStats(ctx)
 	if err != nil {
@@ -91,7 +74,7 @@ func scrapeScheduler(ctx context.Context, rm *scheduler.LXDResourceManager, ch c
 	}
 
 	for host, stat := range stats {
-		fmt.Printf("SCRAPE host: %s, stat: %+v\n", host, stat)
+		l.Info("SCRAPE host stats", "host", host, "stat", stat)
 
 		// Report total CPU
 		ch <- prometheus.MustNewConstMetric(
