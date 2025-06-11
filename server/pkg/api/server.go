@@ -24,17 +24,25 @@ type ShoesLXDMultiServer struct {
 
 	overCommitPercent uint64
 
+	schedulerClient *SchedulerClient
+
 	mu sync.Mutex
 }
 
 // New create gRPC server
-func New(hostConfigs *config.HostConfigMap, mapping map[myshoespb.ResourceType]config.Mapping, imageAliasMap map[string]string, overCommitPercent uint64) (*ShoesLXDMultiServer, error) {
+func New(hostConfigs *config.HostConfigMap, mapping map[myshoespb.ResourceType]config.Mapping, imageAliasMap map[string]string, overCommitPercent uint64, schedulerAddress string) (*ShoesLXDMultiServer, error) {
+	var schedulerClient *SchedulerClient
+	if schedulerAddress != "" {
+		schedulerClient = NewSchedulerClient(schedulerAddress)
+	}
+
 	return &ShoesLXDMultiServer{
 		hostConfigs:       hostConfigs,
 		resourceMapping:   mapping,
 		overCommitPercent: overCommitPercent,
 		mu:                sync.Mutex{},
 		imageAliasMap:     imageAliasMap,
+		schedulerClient:   schedulerClient,
 	}, nil
 }
 
