@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"strings"
 	"time"
 
 	lxd "github.com/lxc/lxd/client"
@@ -15,6 +16,14 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	slm "github.com/whywaita/shoes-lxd-multi/server/pkg/api"
+)
+
+// Runner status constants
+const (
+	RunnerStatusCreating = "Creating"
+	RunnerStatusListening = "Listening"
+	RunnerStatusRunning = "Running"
+	RunnerStatusFinished = "Finished"
 )
 
 // Agent is an agent for pool mode.
@@ -332,7 +341,8 @@ func (a *Agent) collectMetrics() error {
 	}
 	lxdInstances.Reset()
 	for _, i := range s {
-		lxdInstances.WithLabelValues(i.Status, i.Config[configKeyResourceType], i.Config[configKeyImageAlias], i.Name, i.Config[configKeyRunnerName]).Inc()
+		runnerStatus := a.getJobStatus(i)
+		lxdInstances.WithLabelValues(i.Status, i.Config[configKeyResourceType], i.Config[configKeyImageAlias], i.Name, i.Config[configKeyRunnerName], runnerStatus).Inc()
 	}
 	return nil
 }
@@ -356,6 +366,76 @@ func (a *Agent) isZombieInstance(i api.Instance, imageKey string) bool {
 		return false
 	}
 	return true
+}
+
+func (a *Agent) getJobStatus(instance api.Instance) string {
+	if instance.StatusCode != api.Running {
+		return RunnerStatusCreating
+	}
+
+	op, err := a.Client.ExecInstance(instance.Name, api.InstanceExecPost{
+		Command: []string{"journalctl", "-u", "myshoes-setup", "--no-pager", "-n", "100"},
+		WaitForWS: true,
+	}, nil)
+	if err != nil {
+		slog.Debug("Failed to execute journalctl", slog.String("instance", instance.Name), slog.String("err", err.Error()))
+		return RunnerStatusCreating
+	}
+
+	if err := op.Wait(); err != nil {
+		slog.Debug("Failed to wait for journalctl operation", slog.String("instance", instance.Name), slog.String("err", err.Error()))
+		return RunnerStatusCreating
+	}
+
+	opResult := op.Get()
+	if opResult.StatusCode != api.Success {
+		slog.Debug("journalctl command failed", slog.String("instance", instance.Name), slog.Int("status", int(opResult.StatusCode)))
+		return RunnerStatusCreating
+	}
+
+	if opResult.Metadata == nil {
+		return RunnerStatusCreating
+	}
+
+	output, ok := opResult.Metadata["return"].(string)
+	if !ok {
+		return RunnerStatusCreating
+	}
+
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	if len(lines) == 0 {
+		return RunnerStatusCreating
+	}
+
+	hasListening := false
+	hasRunning := false
+	lastLine := ""
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		lastLine = line
+		if strings.Contains(line, "Listening for Jobs") {
+			hasListening = true
+		}
+		if strings.Contains(line, "Running job:") {
+			hasRunning = true
+		}
+	}
+
+	if strings.Contains(lastLine, "Listening for Jobs") {
+		return RunnerStatusListening
+	}
+	if strings.Contains(lastLine, "Running job:") {
+		return RunnerStatusRunning
+	}
+	if hasListening || hasRunning {
+		return RunnerStatusFinished
+	}
+
+	return RunnerStatusCreating
 }
 
 func (a *Agent) isOldImageInstance(i api.Instance, imageKey string) (bool, error) {
