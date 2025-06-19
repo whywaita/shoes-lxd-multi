@@ -113,21 +113,22 @@ func (co *ConfigOld) toConfig() *Config {
 //}
 
 // LoadParams loads parameters for pool agent.
-func LoadParams() (time.Duration, time.Duration, time.Duration, error) {
+func LoadParams() (time.Duration, time.Duration, time.Duration, string, error) {
 	checkInterval, err := loadDurationEnv("LXD_MULTI_CHECK_INTERVAL", 5*time.Second)
 	if err != nil {
-		return 0, 0, 0, err
+		return 0, 0, 0, "", err
 	}
 	waitIdleTime, err := loadDurationEnv("LXD_MULTI_WAIT_IDLE_TIME", 5*time.Second)
 	if err != nil {
-		return 0, 0, 0, err
+		return 0, 0, 0, "", err
 	}
 	zombieAllowTime, err := loadDurationEnv("LXD_MULTI_ZOMBIE_ALLOW_TIME", 5*time.Minute)
 	if err != nil {
-		return 0, 0, 0, err
+		return 0, 0, 0, "", err
 	}
+	lxdDir := loadStringEnv("LXD_MULTI_LXD_DIR", "/var/snap/lxd/common/lxd/logs")
 
-	return checkInterval, waitIdleTime, zombieAllowTime, nil
+	return checkInterval, waitIdleTime, zombieAllowTime, lxdDir, nil
 }
 
 func loadDurationEnv(name string, def time.Duration) (time.Duration, error) {
@@ -140,4 +141,12 @@ func loadDurationEnv(name string, def time.Duration) (time.Duration, error) {
 		return 0, fmt.Errorf("parse %s: %w", name, err)
 	}
 	return d, nil
+}
+
+func loadStringEnv(name string, def string) string {
+	env := os.Getenv(name)
+	if env == "" {
+		return def
+	}
+	return env
 }
