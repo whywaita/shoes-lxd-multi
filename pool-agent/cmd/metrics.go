@@ -21,6 +21,6 @@ var (
 			Subsystem: "lxd",
 			Namespace: "pool_agent",
 		},
-		[]string{"status", "flavor", "image_alias", "container_name", "runner_name"},
+		[]string{"status", "flavor", "image_alias", "container_name", "runner_name", "runner_status"},
 	)
 )

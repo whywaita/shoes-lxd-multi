@@ -4,10 +4,13 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"io"
 	"log/slog"
 	"maps"
 	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	lxd "github.com/lxc/lxd/client"
@@ -17,12 +20,21 @@ import (
 	slm "github.com/whywaita/shoes-lxd-multi/server/pkg/api"
 )
 
+// Runner status constants
+const (
+	RunnerStatusCreating  = "Creating"
+	RunnerStatusListening = "Listening"
+	RunnerStatusRunning   = "Running"
+	RunnerStatusFinished  = "Finished"
+)
+
 // Agent is an agent for pool mode.
 type Agent struct {
 	Image             map[string]*Image
 	CheckInterval     time.Duration
 	WaitIdleTime      time.Duration
 	ZombieAllowTime   time.Duration
+	LxdDir            string
 	registry          *prometheus.Registry
 	ResourceTypesMap  ResourceTypesMap
 	Client            lxd.InstanceServer
@@ -100,7 +112,7 @@ func newAgent(c lxd.InstanceServer) (*Agent, error) {
 		ac[imageName] = _imageInstance
 	}
 
-	checkInterval, waitIdleTime, zombieAllowTime, err := LoadParams()
+	checkInterval, waitIdleTime, zombieAllowTime, lxdDir, err := LoadParams()
 	if err != nil {
 		return nil, fmt.Errorf("load params: %w", err)
 	}
@@ -121,6 +133,7 @@ func newAgent(c lxd.InstanceServer) (*Agent, error) {
 		CheckInterval:     checkInterval,
 		WaitIdleTime:      waitIdleTime,
 		ZombieAllowTime:   zombieAllowTime,
+		LxdDir:            lxdDir,
 		registry:          registry,
 		ResourceTypesMap:  conf.ResourceTypesMap,
 		deletingInstances: make(instances),
@@ -305,34 +318,39 @@ func (a *Agent) CollectResourceTypes(s []api.Instance) []string {
 }
 
 func (a *Agent) CollectMetrics(ctx context.Context) error {
+	logger := slog.Default().With(slog.String("method", "CollectMetrics"))
+
 	ticker := time.NewTicker(a.CheckInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Info("Stopping metrics collection...")
+			logger.Info("Stopping metrics collection...")
 			return nil
 		case <-ticker.C:
-			slog.Debug("Collecting metrics...")
-			if err := a.collectMetrics(); err != nil {
-				slog.Error("Failed to collect metrics", slog.String("err", err.Error()))
+			logger.Debug("Collecting metrics...")
+			if err := a.collectMetrics(logger); err != nil {
+				logger.Error("Failed to collect metrics", slog.String("err", err.Error()))
 				continue
 			}
 			if err := prometheus.WriteToTextfile(metricsPath, a.registry); err != nil {
-				slog.Error("Failed to write metrics", slog.String("err", err.Error()))
+				logger.Error("Failed to write metrics", slog.String("err", err.Error()))
 			}
 		}
 	}
 }
 
-func (a *Agent) collectMetrics() error {
+func (a *Agent) collectMetrics(logger *slog.Logger) error {
+	logger = logger.With(slog.String("method", "collectMetrics"))
+
 	s, err := a.Client.GetInstances(api.InstanceTypeAny)
 	if err != nil {
 		return fmt.Errorf("get instances: %w", err)
 	}
 	lxdInstances.Reset()
 	for _, i := range s {
-		lxdInstances.WithLabelValues(i.Status, i.Config[configKeyResourceType], i.Config[configKeyImageAlias], i.Name, i.Config[configKeyRunnerName]).Inc()
+		runnerStatus := a.getJobStatus(logger, i)
+		lxdInstances.WithLabelValues(i.Status, i.Config[configKeyResourceType], i.Config[configKeyImageAlias], i.Name, i.Config[configKeyRunnerName], runnerStatus).Inc()
 	}
 	return nil
 }
@@ -356,6 +374,76 @@ func (a *Agent) isZombieInstance(i api.Instance, imageKey string) bool {
 		return false
 	}
 	return true
+}
+
+func (a *Agent) getJobStatus(logger *slog.Logger, instance api.Instance) string {
+	logger = logger.With(slog.String("method", "getJobStatus"))
+
+	if instance.StatusCode != api.Running {
+		return RunnerStatusCreating
+	}
+
+	runnerName := instance.Config[configKeyRunnerName]
+	if runnerName == "" {
+		return RunnerStatusCreating
+	}
+
+	consoleLogPath := filepath.Join(a.LxdDir, "myshoes-runner-"+runnerName, "console.log")
+
+	file, err := os.Open(consoleLogPath)
+	if err != nil {
+		logger.Debug("Failed to open console.log file", slog.String("instance", instance.Name), slog.String("path", consoleLogPath), slog.String("err", err.Error()))
+		return RunnerStatusCreating
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		logger.Debug("Failed to read console.log contents", slog.String("instance", instance.Name), slog.String("path", consoleLogPath), slog.String("err", err.Error()))
+		return RunnerStatusCreating
+	}
+
+	output := string(data)
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+
+	maxLines := 100
+	if len(lines) > maxLines {
+		lines = lines[len(lines)-maxLines:]
+	}
+
+	if len(lines) == 0 {
+		return RunnerStatusCreating
+	}
+
+	hasListening := false
+	hasRunning := false
+	lastLine := ""
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		lastLine = line
+		if strings.Contains(line, "Listening for Jobs") {
+			hasListening = true
+		}
+		if strings.Contains(line, "Running job:") {
+			hasRunning = true
+		}
+	}
+
+	if strings.Contains(lastLine, "Listening for Jobs") {
+		return RunnerStatusListening
+	}
+	if strings.Contains(lastLine, "Running job:") {
+		return RunnerStatusRunning
+	}
+	if hasListening || hasRunning {
+		return RunnerStatusFinished
+	}
+
+	return RunnerStatusCreating
 }
 
 func (a *Agent) isOldImageInstance(i api.Instance, imageKey string) (bool, error) {
