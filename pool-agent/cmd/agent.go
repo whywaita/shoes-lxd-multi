@@ -18,6 +18,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	slm "github.com/whywaita/shoes-lxd-multi/server/pkg/api"
+
+	"github.com/whywaita/shoes-lxd-multi/pool-agent/pkg/featureflag"
 )
 
 // Runner status constants
@@ -209,9 +211,18 @@ func countPooledInstances(instances []api.Instance, resourceTypeName, imageAlias
 }
 
 func isPooledInstance(i api.Instance, resourceTypeName, imageAlias string) bool {
-	if !(i.StatusCode == api.Frozen || i.StatusCode == api.Running) {
-		return false
+	// Check if the feature flag is enabled to exclude Running instances
+	if featureflag.IsEnabled(featureflag.CountWithoutRunning) {
+		if i.StatusCode != api.Frozen {
+			return false
+		}
+	} else {
+		// Default behavior: count both Frozen and Running instances
+		if !(i.StatusCode == api.Frozen || i.StatusCode == api.Running) {
+			return false
+		}
 	}
+
 	if i.Config[configKeyResourceType] != resourceTypeName {
 		return false
 	}
