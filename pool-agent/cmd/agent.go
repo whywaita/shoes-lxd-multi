@@ -360,8 +360,8 @@ func (a *Agent) collectMetrics(logger *slog.Logger) error {
 	}
 	lxdInstances.Reset()
 	for _, i := range s {
-		runnerStatus := a.getJobStatus(logger, i)
-		lxdInstances.WithLabelValues(i.Status, i.Config[configKeyResourceType], i.Config[configKeyImageAlias], i.Name, i.Config[configKeyRunnerName], runnerStatus).Inc()
+		runnerStatus, githubRepository := a.getJobStatus(logger, i)
+		lxdInstances.WithLabelValues(i.Status, i.Config[configKeyResourceType], i.Config[configKeyImageAlias], i.Name, i.Config[configKeyRunnerName], runnerStatus, githubRepository).Inc()
 	}
 	return nil
 }
@@ -387,16 +387,16 @@ func (a *Agent) isZombieInstance(i api.Instance, imageKey string) bool {
 	return true
 }
 
-func (a *Agent) getJobStatus(logger *slog.Logger, instance api.Instance) string {
+func (a *Agent) getJobStatus(logger *slog.Logger, instance api.Instance) (string, string) {
 	logger = logger.With(slog.String("method", "getJobStatus"))
 
 	if instance.StatusCode != api.Running {
-		return RunnerStatusCreating
+		return RunnerStatusCreating, ""
 	}
 
 	runnerName := instance.Config[configKeyRunnerName]
 	if runnerName == "" {
-		return RunnerStatusCreating
+		return RunnerStatusCreating, ""
 	}
 
 	consoleLogPath := filepath.Join(a.LxdDir, instance.Name, "console.log")
@@ -404,14 +404,14 @@ func (a *Agent) getJobStatus(logger *slog.Logger, instance api.Instance) string 
 	file, err := os.Open(consoleLogPath)
 	if err != nil {
 		logger.Debug("Failed to open console.log file", slog.String("instance", instance.Name), slog.String("path", consoleLogPath), slog.String("err", err.Error()))
-		return RunnerStatusCreating
+		return RunnerStatusCreating, ""
 	}
 	defer file.Close()
 
 	data, err := io.ReadAll(file)
 	if err != nil {
 		logger.Debug("Failed to read console.log contents", slog.String("instance", instance.Name), slog.String("path", consoleLogPath), slog.String("err", err.Error()))
-		return RunnerStatusCreating
+		return RunnerStatusCreating, ""
 	}
 
 	output := string(data)
@@ -423,12 +423,13 @@ func (a *Agent) getJobStatus(logger *slog.Logger, instance api.Instance) string 
 	}
 
 	if len(lines) == 0 {
-		return RunnerStatusCreating
+		return RunnerStatusCreating, ""
 	}
 
 	hasListening := false
 	hasRunning := false
 	lastLine := ""
+	githubRepository := ""
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -442,19 +443,26 @@ func (a *Agent) getJobStatus(logger *slog.Logger, instance api.Instance) string 
 		if strings.Contains(line, "Running job:") {
 			hasRunning = true
 		}
+		// Extract GitHub repository from "Configuring ... @ https://github.com/..."
+		if strings.Contains(line, "Configuring") && strings.Contains(line, " @ ") {
+			parts := strings.Split(line, " @ ")
+			if len(parts) >= 2 {
+				githubRepository = strings.TrimSpace(parts[1])
+			}
+		}
 	}
 
 	if strings.Contains(lastLine, "Listening for Jobs") {
-		return RunnerStatusListening
+		return RunnerStatusListening, githubRepository
 	}
 	if strings.Contains(lastLine, "Running job:") {
-		return RunnerStatusRunning
+		return RunnerStatusRunning, githubRepository
 	}
 	if hasListening || hasRunning {
-		return RunnerStatusFinished
+		return RunnerStatusFinished, githubRepository
 	}
 
-	return RunnerStatusCreating
+	return RunnerStatusCreating, githubRepository
 }
 
 func (a *Agent) isOldImageInstance(i api.Instance, imageKey string) (bool, error) {
