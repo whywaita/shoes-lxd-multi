@@ -399,7 +399,7 @@ func (a *Agent) getJobStatus(logger *slog.Logger, instance api.Instance) string 
 		return RunnerStatusCreating
 	}
 
-	consoleLogPath := filepath.Join(a.LxdDir, "myshoes-runner-"+runnerName, "console.log")
+	consoleLogPath := filepath.Join(a.LxdDir, instance.Name, "console.log")
 
 	file, err := os.Open(consoleLogPath)
 	if err != nil {
