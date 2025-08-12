@@ -156,8 +156,8 @@ github.com/stretchr/testify v1.10.0 h1:Xv5erBjTwe/5IxqUQTdXv5kgmIvbHo3QQyRwhJsOf
 github.com/stretchr/testify v1.10.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/whywaita/myshoes v1.18.1 h1:ZD1hDOqNVIOj/zUMSy/9a97CjSiBC4I4UINpffSs8rw=
 github.com/whywaita/myshoes v1.18.1/go.mod h1:Ha2imfxCl7tqIeMkLzvtbfkGBJTeCDcBfM8ERElPT7Q=
-github.com/whywaita/shoes-lxd-multi/server v0.0.0-20250528074631-b0d0e9c1f2f6 h1:ulIWxG1jvG466BoNkhSnRx5NVa9K7G+ajRJsYl36ygU=
-github.com/whywaita/shoes-lxd-multi/server v0.0.0-20250528074631-b0d0e9c1f2f6/go.mod h1:cfcCFW8/U3Cw7simJj3neEdmPQqLSXIm4jaSPMK8fEA=
+github.com/whywaita/shoes-lxd-multi/server v0.0.0-20250701044511-1c889d77088a h1:umcfNIpFNEAUmFC3mQ4V6HBJXIaZAinIK3eEiZhQRos=
+github.com/whywaita/shoes-lxd-multi/server v0.0.0-20250701044511-1c889d77088a/go.mod h1:cfcCFW8/U3Cw7simJj3neEdmPQqLSXIm4jaSPMK8fEA=
 github.com/whywaita/xsemaphore v0.0.1 h1:z1o3PPMc9eIXqBKyougQkCMImzS5u1XVsqkxKO0A3dg=
 github.com/whywaita/xsemaphore v0.0.1/go.mod h1:DxG5uRIYgWQPhHggrUwSxLdCzhmKD91mUZYxq/det6o=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=

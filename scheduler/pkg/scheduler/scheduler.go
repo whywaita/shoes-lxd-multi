@@ -3,7 +3,7 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
-	"math"
+	"fmt"
 	"math/rand"
 	"sort"
 	"time"
@@ -38,6 +38,7 @@ type ScheduledResourceStats struct {
 	OldestRequest time.Time `json:"oldest_request"`
 }
 
+// Scheduler implements the resource scheduling logic for LXD instances
 type Scheduler struct {
 	ResourceManager *LXDResourceManager
 }
@@ -55,14 +56,39 @@ func (s *Scheduler) Schedule(ctx context.Context, req ScheduleRequest) (string, 
 	}
 
 	// Create a copy of resources adjusted with scheduled resources
+	adjustedResources := s.adjustResourcesWithScheduled(resources, scheduledResources)
+
+	// Try to schedule and acquire lock with retry logic
+	selected, err := s.scheduleWithLockRetry(ctx, adjustedResources, req, storageBackend)
+	if err != nil || selected == "" {
+		return "", false
+	}
+
+	// Store the scheduled resource information
+	err = s.storeScheduledResource(ctx, storageBackend, selected, req)
+	if err != nil {
+		s.ResourceManager.Logger.Error("failed to store scheduled resource", "error", err)
+		// Continue anyway, as we've already locked the resource
+	}
+
+	// Release the lock after saving the scheduled resources
+	unlockErr := storageBackend.Unlock(ctx, selected)
+	if unlockErr != nil {
+		s.ResourceManager.Logger.Error("failed to release lock", "lxdAPIAddress", selected, "error", unlockErr)
+	}
+
+	return selected, true
+}
+
+// adjustResourcesWithScheduled creates a copy of resources adjusted with scheduled resources
+func (s *Scheduler) adjustResourcesWithScheduled(resources map[string]LXDResource, scheduledResources map[string][]ScheduledResource) map[string]LXDResource {
 	adjustedResources := make(map[string]LXDResource)
 	for lxdAPIAddress, res := range resources {
 		// Create a deep copy of the resource
 		adjustedRes := res
 
 		// Account for scheduled resources
-		schRes, exists := scheduledResources[lxdAPIAddress]
-		if exists {
+		if schRes, exists := scheduledResources[lxdAPIAddress]; exists {
 			for _, sr := range schRes {
 				adjustedRes.Resource.CPUUsed += uint64(sr.CPU)
 				adjustedRes.Resource.MemoryUsed += uint64(sr.Memory)
@@ -71,34 +97,33 @@ func (s *Scheduler) Schedule(ctx context.Context, req ScheduleRequest) (string, 
 
 		adjustedResources[lxdAPIAddress] = adjustedRes
 	}
+	return adjustedResources
+}
 
-	// Try to schedule and acquire lock with retry logic
-	var selected string
-	var locked bool
+// scheduleWithLockRetry tries to schedule and acquire lock with retry logic
+func (s *Scheduler) scheduleWithLockRetry(ctx context.Context, adjustedResources map[string]LXDResource, req ScheduleRequest, storageBackend storage.Storage) (string, error) {
 	for attempt := 0; attempt < MaxSchedulingRetries; attempt++ {
 		// Try to get a lock for each resource to avoid race conditions
 		// but do not filter out resources that are already locked
 		// as they may still have capacity for additional workloads
 		candidate, ok := Schedule(adjustedResources, req)
 		if !ok {
-			return "", false
+			return "", nil // No suitable candidate found
 		}
 
 		// Lock the resource to prevent race conditions during allocation
-		var err error
-		locked, err = storageBackend.TryLock(ctx, candidate)
+		locked, err := storageBackend.TryLock(ctx, candidate)
 		if err != nil {
 			s.ResourceManager.Logger.Error("failed to acquire lock", "lxdAPIAddress", candidate, "error", err, "attempt", attempt+1)
 			if attempt < MaxSchedulingRetries-1 {
 				time.Sleep(LockRetryDelay)
 				continue
 			}
-			return "", false
+			return "", err
 		}
 
 		if locked {
-			selected = candidate
-			break
+			return candidate, nil
 		}
 
 		s.ResourceManager.Logger.Info("resource locked during selection, retrying", "lxdAPIAddress", candidate, "attempt", attempt+1)
@@ -107,12 +132,12 @@ func (s *Scheduler) Schedule(ctx context.Context, req ScheduleRequest) (string, 
 		}
 	}
 
-	if !locked {
-		s.ResourceManager.Logger.Warn("failed to acquire lock after all retries", "maxRetries", MaxSchedulingRetries)
-		return "", false
-	}
+	s.ResourceManager.Logger.Warn("failed to acquire lock after all retries", "maxRetries", MaxSchedulingRetries)
+	return "", nil
+}
 
-	// Store the scheduled resource information
+// storeScheduledResource stores the scheduled resource information
+func (s *Scheduler) storeScheduledResource(ctx context.Context, storageBackend storage.Storage, selected string, req ScheduleRequest) error {
 	schedKey := "scheduled:" + selected
 	var schedList []ScheduledResource
 
@@ -120,8 +145,7 @@ func (s *Scheduler) Schedule(ctx context.Context, req ScheduleRequest) (string, 
 	schedResource, err := storageBackend.GetResource(ctx, schedKey)
 	if err == nil && schedResource != nil {
 		// Resource exists, unmarshal the scheduled resources
-		err = json.Unmarshal([]byte(schedResource.Status), &schedList)
-		if err != nil {
+		if err := json.Unmarshal([]byte(schedResource.Status), &schedList); err != nil {
 			s.ResourceManager.Logger.Error("failed to unmarshal scheduled resources", "error", err)
 			schedList = []ScheduledResource{}
 		}
@@ -138,28 +162,21 @@ func (s *Scheduler) Schedule(ctx context.Context, req ScheduleRequest) (string, 
 	// Serialize and save
 	schedData, err := json.Marshal(schedList)
 	if err != nil {
-		s.ResourceManager.Logger.Error("failed to marshal scheduled resources", "error", err)
-		// Continue anyway, as we've already locked the resource
-	} else {
-		err = storageBackend.SetResource(ctx, &storage.Resource{
-			ID:        schedKey,
-			Status:    string(schedData),
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		}, ScheduledResourceTTL) // TTL for scheduled resource information
-
-		if err != nil {
-			s.ResourceManager.Logger.Error("failed to save scheduled resources", "error", err)
-		}
+		return fmt.Errorf("failed to marshal scheduled resources: %w", err)
 	}
 
-	// Release the lock after saving the scheduled resources
-	err = storageBackend.Unlock(ctx, selected)
+	err = storageBackend.SetResource(ctx, &storage.Resource{
+		ID:        schedKey,
+		Status:    string(schedData),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}, ScheduledResourceTTL) // TTL for scheduled resource information
+
 	if err != nil {
-		s.ResourceManager.Logger.Error("failed to release lock", "lxdAPIAddress", selected, "error", err)
+		return fmt.Errorf("failed to save scheduled resources: %w", err)
 	}
 
-	return selected, true
+	return nil
 }
 
 // GetScheduledResources retrieves all scheduled resources from storage
@@ -246,11 +263,20 @@ func (s *Scheduler) GetScheduledResourceStats(ctx context.Context) (map[string]S
 	return stats, nil
 }
 
+// ScheduleAlgorithmResult represents the result of the scheduling algorithm
+type ScheduleAlgorithmResult struct {
+	LxdAPIAddress string
+	Score         int
+}
+
+// Schedule selects the best host based on resource availability and load balancing criteria
 func Schedule(resources map[string]LXDResource, req ScheduleRequest) (string, bool) {
 	type resource struct {
 		lxdAPIAddress string
 		res           LXDResource
 	}
+	
+	// Convert map to slice for easier processing
 	var input []resource
 	for lxdAPIAddress, res := range resources {
 		input = append(input, resource{
@@ -259,62 +285,80 @@ func Schedule(resources map[string]LXDResource, req ScheduleRequest) (string, bo
 		})
 	}
 
-	// 1. Filter host of fewest used resources
-	var filterMinUsedCore []resource
-	var minUsedCore uint64 = math.MaxUint64 // a very large number
+	// Filter hosts that have enough resources
+	var candidates []resource
 	for _, r := range input {
-		switch {
-		case r.res.Resource.CPUUsed < minUsedCore:
-			// found new minimum used core
-			// reset filtered
-			filterMinUsedCore = []resource{r}
-			minUsedCore = r.res.Resource.CPUUsed
-		case r.res.Resource.CPUUsed == minUsedCore:
-			// found same minimum used core
-			// append to filtered
-			filterMinUsedCore = append(filterMinUsedCore, r)
+		availableCPU := r.res.Resource.CPUTotal - r.res.Resource.CPUUsed
+		availableMemory := r.res.Resource.MemoryTotal - r.res.Resource.MemoryUsed
+		
+		if availableCPU >= uint64(req.CPU) && availableMemory >= uint64(req.Memory) {
+			candidates = append(candidates, r)
 		}
 	}
 
-	// 2. Check if any host has enough resources
-	var filterEnoughResource []resource
-	for _, r := range filterMinUsedCore {
-		if r.res.Resource.CPUTotal-r.res.Resource.CPUUsed >= uint64(req.CPU) && r.res.Resource.MemoryTotal-r.res.Resource.MemoryUsed >= uint64(req.Memory) {
-			// found host with enough resources
-			filterEnoughResource = append(filterEnoughResource, r)
-		}
-	}
-
-	// 3. Sort is finished. If no host has enough resources, return empty
-	if len(filterEnoughResource) == 0 {
+	// If no host has enough resources, return empty
+	if len(candidates) == 0 {
 		return "", false
 	}
 
-	// 4. Sort by least created instances
-	sort.SliceStable(filterEnoughResource, func(i, j int) bool {
-		return len(filterEnoughResource[i].res.Resource.Instances) < len(filterEnoughResource[j].res.Resource.Instances)
-	})
-	var minCreatedInstances int = len(filterEnoughResource[0].res.Resource.Instances)
+	// Score each candidate based on multiple factors
+	type scoredResource struct {
+		resource resource
+		score    int
+	}
+	
+	var scored []scoredResource
+	for _, r := range candidates {
+		score := calculateScore(r.res, req)
+		scored = append(scored, scoredResource{
+			resource: r,
+			score:    score,
+		})
+	}
 
-	// 5. Sort by least used resources
-	sort.SliceStable(filterEnoughResource, func(i, j int) bool {
-		return filterEnoughResource[i].res.Resource.CPUUsed < filterEnoughResource[j].res.Resource.CPUUsed
+	// Sort by score (higher is better)
+	sort.Slice(scored, func(i, j int) bool {
+		return scored[i].score > scored[j].score
 	})
 
-	// 6. Filter by minimum created instances
-	var filterMinCreatedInstances []resource
-	for _, r := range filterEnoughResource {
-		if len(r.res.Resource.Instances) == minCreatedInstances {
-			// found host with minimum created instances
-			filterMinCreatedInstances = append(filterMinCreatedInstances, r)
+	// Select the best candidate
+	// If multiple candidates have the same highest score, randomly select one for better load distribution
+	bestScore := scored[0].score
+	var bestCandidates []resource
+	for _, sr := range scored {
+		if sr.score == bestScore {
+			bestCandidates = append(bestCandidates, sr.resource)
+		} else {
+			break // Since sorted, no more candidates with the same score
 		}
 	}
 
-	// 7. Finish scheduling. Return the random host in the filtered list
-	if len(filterMinCreatedInstances) == 0 {
-		return "", false
+	// Randomly select from the best candidates
+	randomIndex := rand.Intn(len(bestCandidates))
+	return bestCandidates[randomIndex].lxdAPIAddress, true
+}
+
+// calculateScore calculates a score for a resource based on multiple factors
+func calculateScore(res LXDResource, req ScheduleRequest) int {
+	// Factor 1: Available resources (higher is better)
+	availableCPU := res.Resource.CPUTotal - res.Resource.CPUUsed
+	availableMemory := res.Resource.MemoryTotal - res.Resource.MemoryUsed
+	
+	// Normalize available resources to a score (0-100)
+	cpuScore := int((float64(availableCPU) / float64(res.Resource.CPUTotal)) * 50)
+	memoryScore := int((float64(availableMemory) / float64(res.Resource.MemoryTotal)) * 50)
+	
+	// Factor 2: Number of instances (lower is better)
+	instanceCount := len(res.Resource.Instances)
+	instanceScore := 100 - instanceCount // Assuming max 100 instances, adjust as needed
+	
+	// Combine scores with weights
+	totalScore := cpuScore + memoryScore + instanceScore
+	
+	// Ensure score is non-negative
+	if totalScore < 0 {
+		return 0
 	}
-	// Randomly select a host from the filtered list
-	randomIndex := rand.Intn(len(filterMinCreatedInstances))
-	return filterMinCreatedInstances[randomIndex].lxdAPIAddress, true
+	
+	return totalScore
 }
