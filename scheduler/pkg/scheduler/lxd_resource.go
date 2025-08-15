@@ -97,7 +97,7 @@ func (m *LXDResourceManager) updateAll(ctx context.Context) {
 		wg.Add(1)
 		go func(addr string, config serverconfig.HostConfig) {
 			defer wg.Done()
-			
+
 			res, err := m.fetchFunc(ctx, config, m.Logger)
 			if err != nil {
 				m.Logger.Warn("failed to fetch resource", "lxd_api_address", addr, "err", err.Error())

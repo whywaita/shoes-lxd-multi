@@ -275,7 +275,7 @@ func Schedule(resources map[string]LXDResource, req ScheduleRequest) (string, bo
 		lxdAPIAddress string
 		res           LXDResource
 	}
-	
+
 	// Convert map to slice for easier processing
 	var input []resource
 	for lxdAPIAddress, res := range resources {
@@ -290,7 +290,7 @@ func Schedule(resources map[string]LXDResource, req ScheduleRequest) (string, bo
 	for _, r := range input {
 		availableCPU := r.res.Resource.CPUTotal - r.res.Resource.CPUUsed
 		availableMemory := r.res.Resource.MemoryTotal - r.res.Resource.MemoryUsed
-		
+
 		if availableCPU >= uint64(req.CPU) && availableMemory >= uint64(req.Memory) {
 			candidates = append(candidates, r)
 		}
@@ -306,7 +306,7 @@ func Schedule(resources map[string]LXDResource, req ScheduleRequest) (string, bo
 		resource resource
 		score    int
 	}
-	
+
 	var scored []scoredResource
 	for _, r := range candidates {
 		score := calculateScore(r.res, req)
@@ -343,22 +343,22 @@ func calculateScore(res LXDResource, req ScheduleRequest) int {
 	// Factor 1: Available resources (higher is better)
 	availableCPU := res.Resource.CPUTotal - res.Resource.CPUUsed
 	availableMemory := res.Resource.MemoryTotal - res.Resource.MemoryUsed
-	
+
 	// Normalize available resources to a score (0-100)
 	cpuScore := int((float64(availableCPU) / float64(res.Resource.CPUTotal)) * 50)
 	memoryScore := int((float64(availableMemory) / float64(res.Resource.MemoryTotal)) * 50)
-	
+
 	// Factor 2: Number of instances (lower is better)
 	instanceCount := len(res.Resource.Instances)
 	instanceScore := 100 - instanceCount // Assuming max 100 instances, adjust as needed
-	
+
 	// Combine scores with weights
 	totalScore := cpuScore + memoryScore + instanceScore
-	
+
 	// Ensure score is non-negative
 	if totalScore < 0 {
 		return 0
 	}
-	
+
 	return totalScore
 }

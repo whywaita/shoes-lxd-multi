@@ -103,7 +103,7 @@ func run() error {
 	}
 
 	s := &scheduler.Scheduler{ResourceManager: rm}
-	http.Handle("/schedule", s)
+	http.Handle("/", s)
 	http.Handle("/metrics", promhttp.HandlerFor(
 		gatherers,
 		promhttp.HandlerOpts{

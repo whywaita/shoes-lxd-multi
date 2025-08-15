@@ -86,7 +86,7 @@ func (s *RedisStorage) DeleteResource(ctx context.Context, id string) error {
 func (s *RedisStorage) ListResources(ctx context.Context) (map[string][]*Resource, error) {
 	pattern := resourceKey("*")
 	resources := make(map[string][]*Resource)
-	
+
 	// Use SCAN instead of KEYS for better performance
 	iter := s.client.Scan(ctx, 0, pattern, 0).Iterator()
 	for iter.Next(ctx) {
@@ -108,7 +108,7 @@ func (s *RedisStorage) ListResources(ctx context.Context) (map[string][]*Resourc
 
 		resources[id] = append(resources[id], &resource)
 	}
-	
+
 	if err := iter.Err(); err != nil {
 		return nil, err
 	}
