@@ -206,10 +206,17 @@ func (s *ShoesLXDMultiServer) selectHostUsingScheduler(ctx context.Context, targ
 		return nil, fmt.Errorf("failed to get resource requirements: %w", err)
 	}
 
+	// Extract host names from targets
+	var targetHosts []string
+	for _, target := range targets {
+		targetHosts = append(targetHosts, target.HostConfig.LxdHost)
+	}
+
 	// Call scheduler API
 	schedReq := ScheduleRequest{
-		CPU:    cpu,
-		Memory: memory,
+		CPU:         cpu,
+		Memory:      memory,
+		TargetHosts: targetHosts,
 	}
 
 	schedResp, err := s.schedulerClient.Schedule(ctx, schedReq)

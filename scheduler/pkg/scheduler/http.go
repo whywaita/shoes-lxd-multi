@@ -37,8 +37,9 @@ func (s *Scheduler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type ScheduleRequest struct {
-	CPU    int `json:"cpu"`
-	Memory int `json:"memory"`
+	CPU         int      `json:"cpu"`
+	Memory      int      `json:"memory"`
+	TargetHosts []string `json:"target_hosts,omitempty"`
 }
 
 type ScheduleResponse struct {
@@ -62,6 +63,7 @@ func (s *Scheduler) handlePostSchedule(w http.ResponseWriter, r *http.Request) {
 	s.ResourceManager.Logger.Info("received schedule request",
 		"cpu", req.CPU,
 		"memory", req.Memory,
+		"target_hosts", req.TargetHosts,
 		"remote_addr", r.RemoteAddr,
 		"user_agent", r.UserAgent(),
 	)
@@ -71,6 +73,7 @@ func (s *Scheduler) handlePostSchedule(w http.ResponseWriter, r *http.Request) {
 		s.ResourceManager.Logger.Warn("no available host for schedule request",
 			"cpu", req.CPU,
 			"memory", req.Memory,
+			"target_hosts", req.TargetHosts,
 		)
 		httpErrorResponse(w, fmt.Errorf("no available host"), http.StatusNotFound)
 		return
@@ -79,6 +82,7 @@ func (s *Scheduler) handlePostSchedule(w http.ResponseWriter, r *http.Request) {
 	s.ResourceManager.Logger.Info("successfully scheduled request",
 		"cpu", req.CPU,
 		"memory", req.Memory,
+		"target_hosts", req.TargetHosts,
 		"selected_host", host,
 	)
 

@@ -47,6 +47,25 @@ func (s *Scheduler) Schedule(ctx context.Context, req ScheduleRequest) (string, 
 	resources := s.ResourceManager.GetResources(ctx)
 	storageBackend := s.ResourceManager.storage
 
+	// Filter resources by target hosts if specified
+	if len(req.TargetHosts) > 0 {
+		filteredResources := make(map[string]LXDResource)
+		for _, targetHost := range req.TargetHosts {
+			if res, exists := resources[targetHost]; exists {
+				filteredResources[targetHost] = res
+			}
+		}
+		resources = filteredResources
+
+		// If no target hosts are available, return early
+		if len(resources) == 0 {
+			s.ResourceManager.Logger.Warn("no target hosts available",
+				"target_hosts", req.TargetHosts,
+			)
+			return "", false
+		}
+	}
+
 	// Get scheduled resources to account for the planned usage
 	scheduledResources, err := s.GetScheduledResources(ctx)
 	if err != nil {

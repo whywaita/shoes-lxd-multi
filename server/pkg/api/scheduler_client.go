@@ -27,8 +27,9 @@ func NewSchedulerClient(baseURL string) *SchedulerClient {
 
 // ScheduleRequest represents a request to the scheduler
 type ScheduleRequest struct {
-	CPU    int `json:"cpu"`
-	Memory int `json:"memory"`
+	CPU         int      `json:"cpu"`
+	Memory      int      `json:"memory"`
+	TargetHosts []string `json:"target_hosts,omitempty"`
 }
 
 // ScheduleResponse represents a response from the scheduler
