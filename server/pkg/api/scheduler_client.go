@@ -36,6 +36,10 @@ type ScheduleResponse struct {
 	Host string `json:"host"`
 }
 
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
 // Schedule requests the scheduler to select a host
 func (c *SchedulerClient) Schedule(ctx context.Context, req ScheduleRequest) (*ScheduleResponse, error) {
 	if c.baseURL == "" {
@@ -60,7 +64,11 @@ func (c *SchedulerClient) Schedule(ctx context.Context, req ScheduleRequest) (*S
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("scheduler returned status %d", resp.StatusCode)
+		var errResp ErrorResponse
+		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
+			return nil, fmt.Errorf("scheduler returned status %d, but failed to decode error response: %w", resp.StatusCode, err)
+		}
+		return nil, fmt.Errorf("scheduler returned status %d: %s", resp.StatusCode, errResp.Error)
 	}
 
 	var schedResp ScheduleResponse
