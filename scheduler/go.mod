@@ -9,7 +9,7 @@ require (
 	github.com/lxc/lxd v0.0.0-20220311035220-70d80f0252fc
 	github.com/prometheus/client_golang v1.22.0
 	github.com/redis/go-redis/v9 v9.8.0
-	github.com/whywaita/shoes-lxd-multi/server v0.0.0-20250701044511-1c889d77088a
+	github.com/whywaita/shoes-lxd-multi/server v0.0.0-20250815080135-903f4e1c526f
 )
 
 require (

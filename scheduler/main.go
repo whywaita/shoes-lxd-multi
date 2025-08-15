@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"log/slog"
@@ -43,32 +42,14 @@ func main() {
 	}
 }
 
-func loadHostConfigs() (*serverconfig.HostConfigMap, error) {
-	envHosts := os.Getenv(serverconfig.EnvLXDHosts)
-	if envHosts == "" {
-		return nil, fmt.Errorf("%s is not set", serverconfig.EnvLXDHosts)
-	}
-
-	var hosts []serverconfig.HostConfig
-	if err := json.Unmarshal([]byte(envHosts), &hosts); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
-	}
-
-	hcMap := serverconfig.NewHostConfigMap()
-	for _, h := range hosts {
-		hcMap.Store(h.LxdHost, h)
-	}
-
-	return hcMap, nil
-}
-
 func run() error {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
 		AddSource: true,
-		Level:     slog.LevelInfo,
+
+		Level: slog.LevelInfo,
 	})))
 
-	hostConfig, err := loadHostConfigs()
+	hostConfig, err := serverconfig.LoadHostConfigs()
 	if err != nil {
 		return fmt.Errorf("failed to load host configs: %w", err)
 	}

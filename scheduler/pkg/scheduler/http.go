@@ -58,11 +58,29 @@ func (s *Scheduler) handlePostSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Log the incoming schedule request
+	s.ResourceManager.Logger.Info("received schedule request",
+		"cpu", req.CPU,
+		"memory", req.Memory,
+		"remote_addr", r.RemoteAddr,
+		"user_agent", r.UserAgent(),
+	)
+
 	host, ok := s.Schedule(ctx, req)
 	if !ok {
+		s.ResourceManager.Logger.Warn("no available host for schedule request",
+			"cpu", req.CPU,
+			"memory", req.Memory,
+		)
 		httpErrorResponse(w, fmt.Errorf("no available host"), http.StatusNotFound)
 		return
 	}
+
+	s.ResourceManager.Logger.Info("successfully scheduled request",
+		"cpu", req.CPU,
+		"memory", req.Memory,
+		"selected_host", host,
+	)
 
 	resp := ScheduleResponse{Host: host}
 	w.Header().Set("Content-Type", "application/json")
