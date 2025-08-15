@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/docker/go-units"
 	lxd "github.com/lxc/lxd/client"
 	"github.com/lxc/lxd/shared/api"
-	"github.com/docker/go-units"
 	"github.com/whywaita/myshoes/pkg/datastore"
 
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
@@ -219,6 +219,7 @@ func (s *ShoesLXDMultiServer) selectHostUsingScheduler(ctx context.Context, targ
 
 	// Find the selected host in our targets
 	for _, target := range targets {
+		l.Info("checking target host", "host", target.HostConfig.LxdHost, "scheduler_host", schedResp.Host)
 		if target.HostConfig.LxdHost == schedResp.Host {
 			l.Info("scheduler selected host", "host", schedResp.Host, "cpu", cpu, "memory", memory)
 			return target, nil
@@ -238,7 +239,7 @@ func (s *ShoesLXDMultiServer) getResourceRequirements(resourceType string) (int,
 	mapping, ok := s.resourceMapping[rt.ToPb()]
 	if !ok {
 		// Default values if no mapping is configured
-		return 1, 1024*1024*1024, nil // 1 CPU, 1GB memory
+		return 1, 1024 * 1024 * 1024, nil // 1 CPU, 1GB memory
 	}
 
 	// Parse memory string (e.g., "2GB", "1024MB")
