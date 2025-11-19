@@ -133,17 +133,9 @@ func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets [
 		return nil, "", status.Errorf(codes.Internal, "failed to wait executing setup script: %+v", err)
 	}
 
-	// Log stdout/stderr output
-	if stdout.Len() > 0 {
-		l.Info("ExecInstance stdout", "output", stdout.String())
-	}
-	if stderr.Len() > 0 {
-		l.Info("ExecInstance stderr", "output", stderr.String())
-	}
-
-	// Get command exit code
+	// Get command exit code, logging stdout/stderr if non-zero
 	if op.Get().Metadata["return"] == nil || op.Get().Metadata["return"].(int32) != 0 {
-		l.Error("Setup script failed", "stdout", stdout.String(), "stderr", stderr.String())
+		l.Error("Setup script failed", "stdout", stdout.String(), "stderr", stderr.String(), "exitCode", op.Get().Metadata["return"])
 		return nil, "", status.Errorf(codes.Internal, "failed to execute setup script: exit code %v", op.Get().Metadata["return"])
 	}
 
