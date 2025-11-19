@@ -103,7 +103,7 @@ func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets [
 			"--unit", "myshoes-setup",
 			"--property", "After=multi-user.target",
 			"--property", "StandardOutput=journal+console",
-			"--property", fmt.Sprintf("ExecStartPre=/usr/bin/hostnamectl set-hostname %s", req.RunnerName),
+			"--property", fmt.Sprintf("ExecStartPre=/usr/bin/hostname %s", req.RunnerName),
 			"--property", fmt.Sprintf("ExecStartPre=/bin/sh -c 'echo 127.0.1.1 %s >> /etc/hosts'", req.RunnerName),
 			scriptFilename,
 		},
