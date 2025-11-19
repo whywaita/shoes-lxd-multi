@@ -118,7 +118,7 @@ func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets [
 			"--unit", "myshoes-setup",
 			"--property", "After=multi-user.target",
 			"--property", "StandardOutput=journal+console",
-			"--property", fmt.Sprintf("ExecStartPre=/usr/bin/hostname %s", req.RunnerName),
+			"--property", fmt.Sprintf("ExecStartPre=/usr/bin/hostname %s", req.RunnerName), // set hostname inside instance. caution: we don't use hostnamectl because dbus is not response in environment of high load
 			"--property", fmt.Sprintf("ExecStartPre=/bin/sh -c 'echo 127.0.1.1 %s >> /etc/hosts'", req.RunnerName),
 			scriptFilename,
 		},
