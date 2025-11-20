@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
@@ -19,6 +20,15 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// bufferCloser is a wrapper around bytes.Buffer that implements io.WriteCloser
+type bufferCloser struct {
+	*bytes.Buffer
+}
+
+func (bc *bufferCloser) Close() error {
+	return nil
+}
 
 // AddInstance add instance to LXD server
 func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstanceRequest) (*pb.AddInstanceResponse, error) {
@@ -97,22 +107,36 @@ func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets [
 	if err != nil {
 		return nil, "", status.Errorf(codes.Internal, "failed to copy setup script: %+v", err)
 	}
+
+	// Prepare stdout/stderr buffers for capturing exec output
+	stdout := &bufferCloser{Buffer: &bytes.Buffer{}}
+	stderr := &bufferCloser{Buffer: &bytes.Buffer{}}
+
 	op, err := client.ExecInstance(instanceName, api.InstanceExecPost{
 		Command: []string{
 			"systemd-run",
 			"--unit", "myshoes-setup",
 			"--property", "After=multi-user.target",
 			"--property", "StandardOutput=journal+console",
-			"--property", fmt.Sprintf("ExecStartPre=/usr/bin/hostnamectl set-hostname %s", req.RunnerName),
+			"--property", fmt.Sprintf("ExecStartPre=/usr/bin/hostname %s", req.RunnerName), // set hostname inside instance. caution: we don't use hostnamectl because dbus is not response in environment of high load
 			"--property", fmt.Sprintf("ExecStartPre=/bin/sh -c 'echo 127.0.1.1 %s >> /etc/hosts'", req.RunnerName),
 			scriptFilename,
 		},
-	}, nil)
+	}, &lxd.InstanceExecArgs{
+		Stdout: stdout,
+		Stderr: stderr,
+	})
 	if err != nil {
 		return nil, "", status.Errorf(codes.Internal, "failed to execute setup script: %+v", err)
 	}
 	if err := op.Wait(); err != nil {
 		return nil, "", status.Errorf(codes.Internal, "failed to wait executing setup script: %+v", err)
+	}
+
+	// Get command exit code, logging stdout/stderr if non-zero
+	if op.Get().Metadata["return"] == nil || op.Get().Metadata["return"].(float64) != 0 {
+		l.Error("Setup script failed", "stdout", stdout.String(), "stderr", stderr.String(), "exitCode", op.Get().Metadata["return"])
+		return nil, "", status.Errorf(codes.Internal, "failed to execute setup script: exit code %v", op.Get().Metadata["return"])
 	}
 
 	return host, instanceName, nil
