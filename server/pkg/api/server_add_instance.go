@@ -73,7 +73,7 @@ func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets [
 		retried := 0
 		for {
 			var err error
-			host, instanceName, err = allocatePooledInstance(ctx, targets, resourceTypeName, s.parseImageAliasMap(req.OsVersion), s.overCommitPercent, req.RunnerName, _l)
+			host, instanceName, err = s.allocatePooledInstance(ctx, targets, resourceTypeName, s.parseImageAliasMap(req.OsVersion), s.overCommitPercent, req.RunnerName, _l)
 			if err != nil {
 				if retried < 10 {
 					retried++
