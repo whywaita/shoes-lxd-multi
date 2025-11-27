@@ -16,6 +16,7 @@ import (
 	"github.com/whywaita/myshoes/pkg/runner"
 	pb "github.com/whywaita/shoes-lxd-multi/proto.go"
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
+	"github.com/whywaita/shoes-lxd-multi/server/pkg/metric"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -48,7 +49,9 @@ func (s *ShoesLXDMultiServer) AddInstance(ctx context.Context, req *pb.AddInstan
 	if err != nil {
 		return nil, err
 	}
+	timer := metric.NewLXDAPITimer(host.HostConfig.LxdHost, "GetInstance")
 	i, _, err := host.Client.GetInstance(instanceName) // this line needs to assurance, So I will get instance information again from API
+	timer.ObserveDuration(err)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to retrieve instance information: %+v", err)
 	}
@@ -87,23 +90,26 @@ func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets [
 	l := _l.With("host", host.HostConfig.LxdHost, "instance", instanceName)
 	l.Info("AddInstance for pool mode", "runnerName", instanceName)
 	client := host.Client
+	hostAddr := host.HostConfig.LxdHost
 
-	err := unfreezeInstance(client, instanceName)
+	err := unfreezeInstance(client, instanceName, hostAddr)
 	if err != nil {
 		l.Error("failed to unfreeze instance, will delete...")
-		if err := recoverInvalidInstance(client, instanceName); err != nil {
+		if err := recoverInvalidInstance(client, instanceName, hostAddr); err != nil {
 			l.Error("failed to delete invalid instance", "error", err.Error())
 		}
 		return nil, "", status.Errorf(codes.Internal, "unfreeze instance: %+v", err)
 	}
 
 	scriptFilename := fmt.Sprintf("/tmp/myshoes_setup_script.%d", rand.Int())
+	timer := metric.NewLXDAPITimer(hostAddr, "CreateInstanceFile")
 	err = client.CreateInstanceFile(instanceName, scriptFilename, lxd.InstanceFileArgs{
 		Content:   strings.NewReader(req.SetupScript),
 		Mode:      0744,
 		Type:      "file",
 		WriteMode: "overwrite",
 	})
+	timer.ObserveDuration(err)
 	if err != nil {
 		return nil, "", status.Errorf(codes.Internal, "failed to copy setup script: %+v", err)
 	}
@@ -112,6 +118,7 @@ func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets [
 	stdout := &bufferCloser{Buffer: &bytes.Buffer{}}
 	stderr := &bufferCloser{Buffer: &bytes.Buffer{}}
 
+	timer = metric.NewLXDAPITimer(hostAddr, "ExecInstance")
 	op, err := client.ExecInstance(instanceName, api.InstanceExecPost{
 		Command: []string{
 			"systemd-run",
@@ -126,6 +133,7 @@ func (s *ShoesLXDMultiServer) addInstancePoolMode(ctx context.Context, targets [
 		Stdout: stdout,
 		Stderr: stderr,
 	})
+	timer.ObserveDuration(err)
 	if err != nil {
 		return nil, "", status.Errorf(codes.Internal, "failed to execute setup script: %+v", err)
 	}

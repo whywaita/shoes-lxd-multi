@@ -189,7 +189,9 @@ func allocatePooledInstance(ctx context.Context, targets []*lxdclient.LXDHost, r
 func allocateInstance(host *lxdclient.LXDHost, instanceName, runnerName string, l *slog.Logger) error {
 	host.APICallMutex.Lock()
 	defer host.APICallMutex.Unlock()
+	timer := metric.NewLXDAPITimer(host.HostConfig.LxdHost, "GetInstance")
 	i, etag, err := host.Client.GetInstance(instanceName)
+	timer.ObserveDuration(err)
 	if err != nil {
 		return fmt.Errorf("get instance: %w", err)
 	}
@@ -203,7 +205,9 @@ func allocateInstance(host *lxdclient.LXDHost, instanceName, runnerName string, 
 	i.InstancePut.Config[lxdclient.ConfigKeyRunnerName] = runnerName
 	i.InstancePut.Config[lxdclient.ConfigKeyAllocatedAt] = time.Now().UTC().Format(time.RFC3339Nano)
 
+	timer = metric.NewLXDAPITimer(host.HostConfig.LxdHost, "UpdateInstance")
 	op, err := host.Client.UpdateInstance(instanceName, i.InstancePut, etag)
+	timer.ObserveDuration(err)
 	if err != nil {
 		return fmt.Errorf("update instance: %w", err)
 	}
@@ -212,7 +216,9 @@ func allocateInstance(host *lxdclient.LXDHost, instanceName, runnerName string, 
 	}
 
 	// Workaround for https://github.com/canonical/lxd/issues/12189
+	timer = metric.NewLXDAPITimer(host.HostConfig.LxdHost, "GetInstance")
 	i, _, err = host.Client.GetInstance(instanceName)
+	timer.ObserveDuration(err)
 	if err != nil {
 		return fmt.Errorf("get instance: %w", err)
 	}
@@ -223,8 +229,10 @@ func allocateInstance(host *lxdclient.LXDHost, instanceName, runnerName string, 
 	return nil
 }
 
-func recoverInvalidInstance(c lxd.InstanceServer, instanceName string) error {
+func recoverInvalidInstance(c lxd.InstanceServer, instanceName, host string) error {
+	timer := metric.NewLXDAPITimer(host, "DeleteInstance")
 	op, err := c.DeleteInstance(instanceName)
+	timer.ObserveDuration(err)
 	if err != nil {
 		return fmt.Errorf("delete instance: %w", err)
 	}
@@ -234,8 +242,10 @@ func recoverInvalidInstance(c lxd.InstanceServer, instanceName string) error {
 	return nil
 }
 
-func unfreezeInstance(c lxd.InstanceServer, instanceName string) error {
+func unfreezeInstance(c lxd.InstanceServer, instanceName, host string) error {
+	timer := metric.NewLXDAPITimer(host, "GetInstanceState")
 	state, etag, err := c.GetInstanceState(instanceName)
+	timer.ObserveDuration(err)
 	if err != nil {
 		return fmt.Errorf("get instance state: %w", err)
 	}
@@ -243,10 +253,12 @@ func unfreezeInstance(c lxd.InstanceServer, instanceName string) error {
 	case api.Running:
 		// do nothing
 	case api.Frozen:
+		timer = metric.NewLXDAPITimer(host, "UpdateInstanceState")
 		op, err := c.UpdateInstanceState(instanceName, api.InstanceStatePut{
 			Action:  "unfreeze",
 			Timeout: -1,
 		}, etag)
+		timer.ObserveDuration(err)
 		if err != nil {
 			return fmt.Errorf("update instance state: %w", err)
 		}
