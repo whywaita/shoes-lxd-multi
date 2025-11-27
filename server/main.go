@@ -71,6 +71,8 @@ func serveMetrics(ctx context.Context, hostConfigs *config.HostConfigMap) {
 	registry.MustRegister(metric.FailedLxdAllocate)
 	registry.MustRegister(metric.GRPCServerRequestsTotal)
 	registry.MustRegister(metric.GRPCServerRequestDuration)
+	registry.MustRegister(metric.LXDAPIRequestsTotal)
+	registry.MustRegister(metric.LXDAPIRequestDuration)
 	gatherers := prometheus.Gatherers{
 		prometheus.DefaultGatherer,
 		registry,

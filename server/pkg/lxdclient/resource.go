@@ -112,7 +112,7 @@ func GetResourceFromLXDWithClient(ctx context.Context, client lxd.InstanceServer
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to scrape total resource: %w", err)
 	}
-	instances, err := GetAnyInstances(client)
+	instances, err := GetAnyInstances(client, host)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to retrieve list of instance: %w", err)
 	}
@@ -156,7 +156,7 @@ func ScrapeLXDHostResources(client lxd.InstanceServer, host string, logger *slog
 
 	logger.Warn("failed to get host resource from cache, so scrape from lxd")
 
-	cpuTotal, memoryTotal, hostname, err := ScrapeLXDHostResourcesFromLXD(client)
+	cpuTotal, memoryTotal, hostname, err := ScrapeLXDHostResourcesFromLXD(client, host)
 	if err != nil {
 		return 0, 0, "", fmt.Errorf("failed to scrape total resource: %w", err)
 	}
@@ -171,13 +171,17 @@ func ScrapeLXDHostResources(client lxd.InstanceServer, host string, logger *slog
 }
 
 // ScrapeLXDHostResourcesFromLXD scrape all resources
-func ScrapeLXDHostResourcesFromLXD(client lxd.InstanceServer) (uint64, uint64, string, error) {
+func ScrapeLXDHostResourcesFromLXD(client lxd.InstanceServer, host string) (uint64, uint64, string, error) {
+	startTime := time.Now()
 	resources, err := client.GetServerResources()
+	observeAPICall(host, "GetServerResources", startTime, err)
 	if err != nil {
 		return 0, 0, "", fmt.Errorf("failed to get server resource: %w", err)
 	}
 
+	startTime = time.Now()
 	server, _, err := client.GetServer()
+	observeAPICall(host, "GetServer", startTime, err)
 	if err != nil {
 		return 0, 0, "", fmt.Errorf("failed to get server: %w", err)
 	}
@@ -186,8 +190,10 @@ func ScrapeLXDHostResourcesFromLXD(client lxd.InstanceServer) (uint64, uint64, s
 }
 
 // GetAnyInstances get any instances from lxd
-func GetAnyInstances(client lxd.InstanceServer) ([]api.Instance, error) {
+func GetAnyInstances(client lxd.InstanceServer, host string) ([]api.Instance, error) {
+	startTime := time.Now()
 	instances, err := client.GetInstances(api.InstanceTypeAny)
+	observeAPICall(host, "GetInstances", startTime, err)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve instances: %w", err)
 	}

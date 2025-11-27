@@ -8,6 +8,7 @@ import (
 
 	"github.com/lxc/lxd/shared/api"
 	pb "github.com/whywaita/shoes-lxd-multi/proto.go"
+	"github.com/whywaita/shoes-lxd-multi/server/pkg/metric"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -37,11 +38,14 @@ func (s *ShoesLXDMultiServer) DeleteInstance(ctx context.Context, req *pb.Delete
 
 	l.Info("will stop instance")
 	client := host.Client
+	hostAddr := host.HostConfig.LxdHost
 	reqState := api.InstanceStatePut{
 		Action:  "stop",
 		Timeout: -1,
 	}
+	timer := metric.NewLXDAPITimer(hostAddr, "UpdateInstanceState")
 	op, err := client.UpdateInstanceState(instanceName, reqState, "")
+	timer.ObserveDuration(err)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to stop instance: %+v", err)
 	}
@@ -50,7 +54,9 @@ func (s *ShoesLXDMultiServer) DeleteInstance(ctx context.Context, req *pb.Delete
 	}
 
 	l.Info("will delete instance")
+	timer = metric.NewLXDAPITimer(hostAddr, "DeleteInstance")
 	op, err = client.DeleteInstance(instanceName)
+	timer.ObserveDuration(err)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to delete instance: %+v", err)
 	}

@@ -11,6 +11,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
+	"github.com/whywaita/shoes-lxd-multi/server/pkg/metric"
 )
 
 var (
@@ -74,7 +75,9 @@ func isExistInstanceWithTimeout(targetLXDHost *lxdclient.LXDHost, instanceName s
 	targetLXDHost.APICallMutex.Lock()
 	defer targetLXDHost.APICallMutex.Unlock()
 
+	timer := metric.NewLXDAPITimer(targetLXDHost.HostConfig.LxdHost, "GetInstance")
 	_, _, err := c.GetInstance(instanceName)
+	timer.ObserveDuration(err)
 	if err != nil {
 		switch {
 		case strings.Contains(err.Error(), "Instance not found"):
