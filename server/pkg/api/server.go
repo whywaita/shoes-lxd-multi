@@ -11,6 +11,7 @@ import (
 	pb "github.com/whywaita/shoes-lxd-multi/proto.go"
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/config"
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
+	"github.com/whywaita/shoes-lxd-multi/server/pkg/metric"
 	"google.golang.org/grpc"
 )
 
@@ -46,7 +47,12 @@ func (s *ShoesLXDMultiServer) Run(listenPort int) error {
 	}
 	slog.Info("start listen", "port", listenPort)
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(
+			metric.LoggingUnaryServerInterceptor(),
+			metric.MetricsUnaryServerInterceptor(),
+		),
+	)
 	pb.RegisterShoesLXDMultiServer(grpcServer, s)
 
 	if err := grpcServer.Serve(lis); err != nil {
