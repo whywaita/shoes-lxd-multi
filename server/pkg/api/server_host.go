@@ -24,6 +24,7 @@ func (s *ShoesLXDMultiServer) isExistInstance(targetLXDHosts []*lxdclient.LXDHos
 	eg := errgroup.Group{}
 	var foundHost *lxdclient.LXDHost
 	foundHost = nil
+	countTimeoutStadium := 0
 
 	for _, host := range targetLXDHosts {
 		func(host *lxdclient.LXDHost) {
@@ -37,6 +38,7 @@ func (s *ShoesLXDMultiServer) isExistInstance(targetLXDHosts []*lxdclient.LXDHos
 						return nil
 					case errors.Is(err, ErrTimeoutGetInstance):
 						l.Warn("failed to get instance (reach timeout), So ignore host", "err", err.Error())
+						countTimeoutStadium++
 						return nil
 					default:
 						l.Warn("failed to get instance", "err", err.Error())
@@ -53,11 +55,17 @@ func (s *ShoesLXDMultiServer) isExistInstance(targetLXDHosts []*lxdclient.LXDHos
 	if err := eg.Wait(); err != nil {
 		return nil, fmt.Errorf("failed to get instance: %w", err)
 	}
-	if foundHost == nil {
+	if foundHost != nil {
+		// It's good case
+		return foundHost, nil
+	}
+	if countTimeoutStadium == 0 {
 		return nil, ErrInstanceIsNotFound
 	}
 
-	return foundHost, nil
+	// found timeout stadium
+	logger.Warn("failed to get instance (reach timeout), So ignore hosts", "count of timeout stadium", countTimeoutStadium)
+	return nil, fmt.Errorf("failed to get instance (reach timeout)")
 }
 
 var (
