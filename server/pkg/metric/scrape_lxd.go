@@ -109,7 +109,10 @@ func scrapeLXDHost(ctx context.Context, host *lxdclient.LXDHost, ch chan<- prome
 	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
-	host.APICallMutex.Lock()
+	if !host.APICallMutex.TryLock() {
+		logger.Info("APICallMutex is busy, skipping scrape")
+		return nil
+	}
 	defer host.APICallMutex.Unlock()
 
 	resources, hostname, err := lxdclient.GetResourceFromLXDWithClient(cctx, host.Client, host.HostConfig.LxdHost, logger)
