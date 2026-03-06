@@ -116,7 +116,10 @@ func scrapeLXDHost(ctx context.Context, host *lxdclient.LXDHost, ch chan<- prome
 	}
 	defer host.APICallMutex.Unlock()
 
-	resources, hostname, err := lxdclient.GetResourceFromLXDWithClient(cctx, host.Client, host.HostConfig.LxdHost, logger)
+	c := host.Client.WithContext(cctx)
+	defer host.Client.WithContext(context.Background())
+
+	resources, hostname, err := lxdclient.GetResourceFromLXDWithClient(cctx, c, host.HostConfig.LxdHost, logger)
 	if err != nil {
 		return fmt.Errorf("failed to get resource from lxd: %w", err)
 	}

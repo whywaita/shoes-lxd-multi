@@ -7,9 +7,9 @@ require (
 	github.com/lxc/lxd v0.0.0-20220311035220-70d80f0252fc
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/prometheus/client_golang v1.20.5
+	github.com/prometheus/client_model v0.6.1
 	github.com/whywaita/myshoes v1.18.1
 	github.com/whywaita/shoes-lxd-multi/proto.go v0.0.0-20250116075849-4e2ce02317ec
-	github.com/whywaita/xsemaphore v0.0.1
 	golang.org/x/sync v0.10.0
 	google.golang.org/grpc v1.70.0
 )
@@ -47,7 +47,6 @@ require (
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/pborman/uuid v1.2.1 // indirect
 	github.com/pkg/sftp v1.13.4 // indirect
-	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
