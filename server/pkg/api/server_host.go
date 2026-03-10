@@ -69,11 +69,13 @@ func isExistInstanceWithTimeout(targetLXDHost *lxdclient.LXDHost, instanceName s
 	cctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	client := targetLXDHost.Client
-	c := client.WithContext(cctx)
-
+	waitStart := time.Now()
 	targetLXDHost.APICallMutex.Lock()
+	metric.ObserveMutexWait(targetLXDHost.HostConfig.LxdHost, "isExistInstanceWithTimeout", instanceName, time.Since(waitStart))
 	defer targetLXDHost.APICallMutex.Unlock()
+
+	c := targetLXDHost.Client.WithContext(cctx)
+	defer targetLXDHost.Client.WithContext(context.Background())
 
 	timer := metric.NewLXDAPITimer(targetLXDHost.HostConfig.LxdHost, "GetInstance")
 	_, _, err := c.GetInstance(instanceName)
@@ -87,9 +89,6 @@ func isExistInstanceWithTimeout(targetLXDHost *lxdclient.LXDHost, instanceName s
 		}
 		return fmt.Errorf("failed to found instance: %w", err)
 	}
-
-	// Reset context (remove timeout)
-	client.WithContext(context.Background())
 
 	return nil
 }
