@@ -187,9 +187,7 @@ func allocatePooledInstance(ctx context.Context, targets []*lxdclient.LXDHost, r
 }
 
 func allocateInstance(host *lxdclient.LXDHost, instanceName, runnerName string, l *slog.Logger) error {
-	waitStart := time.Now()
 	host.APICallMutex.Lock()
-	metric.ObserveMutexWait(host.HostConfig.LxdHost, "allocateInstance", instanceName, time.Since(waitStart))
 	defer host.APICallMutex.Unlock()
 	timer := metric.NewLXDAPITimer(host.HostConfig.LxdHost, "GetInstance")
 	i, etag, err := host.Client.GetInstance(instanceName)

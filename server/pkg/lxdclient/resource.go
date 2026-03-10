@@ -80,9 +80,7 @@ func GetResourceFromLXD(ctx context.Context, hostConfig config.HostConfig, logge
 	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
-	waitStart := time.Now()
 	host.APICallMutex.Lock()
-	observeMutexWait(hostConfig.LxdHost, "GetResourceFromLXD", "", time.Since(waitStart))
 	defer host.APICallMutex.Unlock()
 
 	c := host.Client.WithContext(cctx)
