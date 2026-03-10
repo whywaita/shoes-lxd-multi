@@ -21,20 +21,3 @@ func observeAPICall(host, method string, startTime time.Time, err error) {
 		observer.(APIMetricsObserver)(host, method, time.Since(startTime), err)
 	}
 }
-
-// MutexWaitObserver is a function type for observing mutex wait duration
-type MutexWaitObserver func(host, caller, instance string, duration time.Duration)
-
-var mutexWaitObserver atomic.Value
-
-// SetMutexWaitObserver sets the observer function for mutex wait metrics
-func SetMutexWaitObserver(observer MutexWaitObserver) {
-	mutexWaitObserver.Store(observer)
-}
-
-// observeMutexWait records mutex wait duration if an observer is set
-func observeMutexWait(host, caller, instance string, waitDuration time.Duration) {
-	if observer := mutexWaitObserver.Load(); observer != nil {
-		observer.(MutexWaitObserver)(host, caller, instance, waitDuration)
-	}
-}
