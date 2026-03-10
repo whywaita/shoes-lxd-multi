@@ -14,7 +14,6 @@ import (
 
 	lxd "github.com/lxc/lxd/client"
 	"github.com/lxc/lxd/shared/api"
-	"github.com/whywaita/xsemaphore"
 )
 
 // Resource is resource of lxd host
@@ -80,36 +79,26 @@ func GetResourceFromLXD(ctx context.Context, hostConfig config.HostConfig, logge
 
 	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	c := host.Client.WithContext(cctx)
 
 	waitStart := time.Now()
 	host.APICallMutex.Lock()
 	observeMutexWait(hostConfig.LxdHost, "GetResourceFromLXD", "", time.Since(waitStart))
 	defer host.APICallMutex.Unlock()
 
+	c := host.Client.WithContext(cctx)
+	defer host.Client.WithContext(context.Background())
+
 	r, hostname, err := GetResourceFromLXDWithClient(cctx, c, hostConfig.LxdHost, logger)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get resource from lxd: %w", err)
 	}
 
-	host.Client.WithContext(context.Background())
-
 	return r, hostname, nil
 }
 
-// GetResourceFromLXDWithClient get resources from LXD API with client
+// GetResourceFromLXDWithClient get resources from LXD API with client.
+// The caller must hold the APICallMutex and set the context on the client before calling this function.
 func GetResourceFromLXDWithClient(ctx context.Context, client lxd.InstanceServer, host string, logger *slog.Logger) (*Resource, string, error) {
-	sem := xsemaphore.Get(host, 1)
-	if err := sem.Acquire(ctx, 1); err != nil {
-		return nil, "", fmt.Errorf("failed to acquire semaphore: %w", err)
-	}
-	defer sem.Release(1)
-
-	// cast ProtocolLXD from lxd.InstanceServer
-	c := client.(*lxd.ProtocolLXD)
-	// Set context to client
-	client = c.WithContext(ctx)
-
 	cpuTotal, memoryTotal, hostname, err := ScrapeLXDHostResources(client, host, logger)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to scrape total resource: %w", err)
@@ -130,8 +119,6 @@ func GetResourceFromLXDWithClient(ctx context.Context, client lxd.InstanceServer
 		CPUUsed:     cpuUsed,
 		MemoryUsed:  memoryUsed,
 	}
-
-	c.WithContext(context.Background())
 
 	return &r, hostname, nil
 }
