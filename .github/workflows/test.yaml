@@ -15,6 +15,7 @@ jobs:
           - server
           - shoes-lxd-multi
           - pool-agent
+          - scheduler
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,6 +40,12 @@ jobs:
           go test -v ./...
   docker-build-test:
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - server
+          - scheduler
     steps:
      - name: Checkout
        uses: actions/checkout@v4
@@ -46,5 +53,5 @@ jobs:
          fetch-depth: 1
      - name: docker build
        run: |
-         cd server
+         cd ${{ matrix.target }}
          docker build .

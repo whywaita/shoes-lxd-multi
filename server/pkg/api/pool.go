@@ -11,8 +11,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/docker/go-units"
 	lxd "github.com/lxc/lxd/client"
 	"github.com/lxc/lxd/shared/api"
+	"github.com/whywaita/myshoes/pkg/datastore"
 
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/metric"
@@ -155,8 +157,18 @@ func findInstanceByJob(ctx context.Context, targets []*lxdclient.LXDHost, runner
 	return s[0].Host, s[0].InstanceName, true
 }
 
-func allocatePooledInstance(ctx context.Context, targets []*lxdclient.LXDHost, resourceType, imageAlias string, limitOverCommit uint64, runnerName string, l *slog.Logger) (*lxdclient.LXDHost, string, error) {
-	s := findInstances(ctx, targets, func(i api.Instance) bool {
+func (s *ShoesLXDMultiServer) allocatePooledInstance(ctx context.Context, targets []*lxdclient.LXDHost, resourceType, imageAlias string, limitOverCommit uint64, runnerName string, l *slog.Logger) (*lxdclient.LXDHost, string, error) {
+	// Use scheduler if configured
+	if s.schedulerClient != nil {
+		if selectedHost, err := s.selectHostUsingScheduler(ctx, targets, resourceType, l); err == nil && selectedHost != nil {
+			// Filter targets to only include the selected host
+			targets = []*lxdclient.LXDHost{selectedHost}
+		} else {
+			l.Warn("scheduler failed, falling back to default algorithm", "err", err)
+		}
+	}
+
+	instances := findInstances(ctx, targets, func(i api.Instance) bool {
 		if i.StatusCode != api.Frozen {
 			return false
 		}
@@ -172,7 +184,7 @@ func allocatePooledInstance(ctx context.Context, targets []*lxdclient.LXDHost, r
 		return true
 	}, limitOverCommit, l)
 
-	for _, i := range s {
+	for _, i := range instances {
 		l := l.With("host", i.Host.HostConfig.LxdHost, "instance", i.InstanceName)
 		if err := allocateInstance(i.Host, i.InstanceName, runnerName, l); err != nil {
 			l.Info("failed to allocate instance (trying another instance)", "err", err)
@@ -184,6 +196,66 @@ func allocatePooledInstance(ctx context.Context, targets []*lxdclient.LXDHost, r
 	}
 
 	return nil, "", fmt.Errorf("no available instance for resource_type=%q image_alias=%q", resourceType, imageAlias)
+}
+
+// selectHostUsingScheduler uses the scheduler to select the best host
+func (s *ShoesLXDMultiServer) selectHostUsingScheduler(ctx context.Context, targets []*lxdclient.LXDHost, resourceType string, l *slog.Logger) (*lxdclient.LXDHost, error) {
+	// Get resource requirements for the given resource type
+	cpu, memory, err := s.getResourceRequirements(resourceType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get resource requirements: %w", err)
+	}
+
+	// Extract host names from targets
+	var targetHosts []string
+	for _, target := range targets {
+		targetHosts = append(targetHosts, target.HostConfig.LxdHost)
+	}
+
+	// Call scheduler API
+	schedReq := ScheduleRequest{
+		CPU:         cpu,
+		Memory:      memory,
+		TargetHosts: targetHosts,
+	}
+
+	schedResp, err := s.schedulerClient.Schedule(ctx, schedReq)
+	if err != nil {
+		return nil, fmt.Errorf("scheduler API call failed: %w", err)
+	}
+
+	// Find the selected host in our targets
+	for _, target := range targets {
+		l.Info("checking target host", "host", target.HostConfig.LxdHost, "scheduler_host", schedResp.Host)
+		if target.HostConfig.LxdHost == schedResp.Host {
+			l.Info("scheduler selected host", "host", schedResp.Host, "cpu", cpu, "memory", memory)
+			return target, nil
+		}
+	}
+
+	return nil, fmt.Errorf("scheduler selected host %q not found in targets", schedResp.Host)
+}
+
+// getResourceRequirements converts resource type to CPU and memory requirements
+func (s *ShoesLXDMultiServer) getResourceRequirements(resourceType string) (int, int, error) {
+	rt := datastore.UnmarshalResourceType(resourceType)
+	if rt == datastore.ResourceTypeUnknown {
+		return 0, 0, fmt.Errorf("unknown resource type: %s", resourceType)
+	}
+
+	mapping, ok := s.resourceMapping[rt.ToPb()]
+	if !ok {
+		// Default values if no mapping is configured
+		return 1, 1024 * 1024 * 1024, nil // 1 CPU, 1GB memory
+	}
+
+	// Parse memory string (e.g., "2GB", "1024MB")
+	memoryBytes, err := units.FromHumanSize(mapping.Memory)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to parse memory size %q: %w", mapping.Memory, err)
+	}
+
+	return mapping.CPUCore, int(memoryBytes), nil
 }
 
 func allocateInstance(host *lxdclient.LXDHost, instanceName, runnerName string, l *slog.Logger) error {
