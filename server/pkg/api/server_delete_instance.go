@@ -24,7 +24,7 @@ func (s *ShoesLXDMultiServer) DeleteInstance(ctx context.Context, req *pb.Delete
 		return nil, status.Errorf(codes.InvalidArgument, "failed to validate target hosts: %+v", err)
 	}
 
-	host, err := s.isExistInstance(targetLXDHosts, instanceName)
+	host, err := s.isExistInstance(ctx, targetLXDHosts, instanceName)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInstanceIsNotFound):

@@ -18,22 +18,41 @@ var (
 )
 
 // isExistInstance search created instance in same name
-func (s *ShoesLXDMultiServer) isExistInstance(targetLXDHosts []*lxdclient.LXDHost, instanceName string) (*lxdclient.LXDHost, error) {
-	wg := sync.WaitGroup{}
-	var foundHost *lxdclient.LXDHost
-	foundHost = nil
+func (s *ShoesLXDMultiServer) isExistInstance(ctx context.Context, targetLXDHosts []*lxdclient.LXDHost, instanceName string) (*lxdclient.LXDHost, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var (
+		foundHost *lxdclient.LXDHost
+		mu        sync.Mutex
+		wg        sync.WaitGroup
+	)
 
 	for _, host := range targetLXDHosts {
 		wg.Add(1)
 		go func(host *lxdclient.LXDHost) {
 			defer wg.Done()
-			err := isExistInstanceWithTimeout(host, instanceName)
+
+			// Early return if already found
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			err := isExistInstanceWithTimeout(ctx, host, instanceName)
 			if err != nil {
-				// If instance is not found or timeout, ignore and continue to search other host
+				// Ignore errors (instance not found, timeout, etc.)
 				return
 			}
 
-			foundHost = host
+			// Set only the first found host
+			mu.Lock()
+			if foundHost == nil {
+				foundHost = host
+				cancel() // Notify other goroutines to terminate early
+			}
+			mu.Unlock()
 		}(host)
 	}
 
@@ -50,8 +69,8 @@ var (
 	ErrTimeoutGetInstance = fmt.Errorf("timeout of GetInstance")
 )
 
-func isExistInstanceWithTimeout(targetLXDHost *lxdclient.LXDHost, instanceName string) error {
-	cctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+func isExistInstanceWithTimeout(ctx context.Context, targetLXDHost *lxdclient.LXDHost, instanceName string) error {
+	cctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
 	targetLXDHost.APICallMutex.Lock()
