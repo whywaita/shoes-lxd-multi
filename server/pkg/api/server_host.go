@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
+	"sync"
 	"time"
-
-	"golang.org/x/sync/errgroup"
 
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/lxdclient"
 	"github.com/whywaita/shoes-lxd-multi/server/pkg/metric"
@@ -20,39 +18,45 @@ var (
 )
 
 // isExistInstance search created instance in same name
-func (s *ShoesLXDMultiServer) isExistInstance(targetLXDHosts []*lxdclient.LXDHost, instanceName string, logger *slog.Logger) (*lxdclient.LXDHost, error) {
-	eg := errgroup.Group{}
-	var foundHost *lxdclient.LXDHost
-	foundHost = nil
+func (s *ShoesLXDMultiServer) isExistInstance(ctx context.Context, targetLXDHosts []*lxdclient.LXDHost, instanceName string) (*lxdclient.LXDHost, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var (
+		foundHost *lxdclient.LXDHost
+		mu        sync.Mutex
+		wg        sync.WaitGroup
+	)
 
 	for _, host := range targetLXDHosts {
-		func(host *lxdclient.LXDHost) {
-			eg.Go(func() error {
-				l := logger.With("host", host.HostConfig.LxdHost)
-				err := isExistInstanceWithTimeout(host, instanceName)
-				if err != nil {
-					switch {
-					case errors.Is(err, ErrInstanceIsNotFound):
-						// not found instance, It's a many case in this. so ignore this host
-						return nil
-					case errors.Is(err, ErrTimeoutGetInstance):
-						l.Warn("failed to get instance (reach timeout), So ignore host", "err", err.Error())
-						return nil
-					default:
-						l.Warn("failed to get instance", "err", err.Error())
-						return nil
-					}
-				}
+		wg.Add(1)
+		go func(host *lxdclient.LXDHost) {
+			defer wg.Done()
 
+			// Early return if already found
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			err := isExistInstanceWithTimeout(ctx, host, instanceName)
+			if err != nil {
+				// Ignore errors (instance not found, timeout, etc.)
+				return
+			}
+
+			// Set only the first found host
+			mu.Lock()
+			if foundHost == nil {
 				foundHost = host
-				return nil
-			})
+				cancel() // Notify other goroutines to terminate early
+			}
+			mu.Unlock()
 		}(host)
 	}
 
-	if err := eg.Wait(); err != nil {
-		return nil, fmt.Errorf("failed to get instance: %w", err)
-	}
+	wg.Wait()
 	if foundHost == nil {
 		return nil, ErrInstanceIsNotFound
 	}
@@ -65,8 +69,8 @@ var (
 	ErrTimeoutGetInstance = fmt.Errorf("timeout of GetInstance")
 )
 
-func isExistInstanceWithTimeout(targetLXDHost *lxdclient.LXDHost, instanceName string) error {
-	cctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+func isExistInstanceWithTimeout(ctx context.Context, targetLXDHost *lxdclient.LXDHost, instanceName string) error {
+	cctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
 	targetLXDHost.APICallMutex.Lock()
