@@ -1,7 +1,6 @@
 module github.com/whywaita/shoes-lxd-multi/shoes-lxd-multi
 
-go 1.23
-toolchain go1.27.3
+go 1.27.3
 
 require (
 	github.com/hashicorp/go-plugin v1.6.3

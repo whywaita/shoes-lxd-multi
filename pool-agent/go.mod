@@ -1,7 +1,6 @@
 module github.com/whywaita/shoes-lxd-multi/pool-agent
 
-go 1.23
-toolchain go1.27.3
+go 1.27.3
 
 require (
 	github.com/google/go-cmp v0.5.9

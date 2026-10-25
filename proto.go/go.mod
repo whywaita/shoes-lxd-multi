@@ -1,8 +1,7 @@
 module github.com/whywaita/shoes-lxd-multi/proto.go
 
-go 1.23
+go 1.27.3
 
-toolchain go1.27.3
 require (
 	github.com/whywaita/myshoes v1.16.7
 	google.golang.org/grpc v1.68.0
