@@ -27,7 +27,7 @@ jobs:
       - name: lint
         run: |
           cd ${{ matrix.target }}
-          go install honnef.co/go/tools/cmd/staticcheck@latest
+          GOTOOLCHAIN=go1.27.3 go install honnef.co/go/tools/cmd/staticcheck@v0.8.2
           staticcheck ./...
       - name: go vet
         run: |
